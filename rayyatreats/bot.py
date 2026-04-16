@@ -4,6 +4,24 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+import os
+
+_REQUIRED_ENV = [
+    "RAYYA_EMAIL",
+    "RAYYA_PASSWORD",
+    "CC_HOLDER",
+    "CC_NUMBER",
+    "CC_EXPIRY",
+    "CC_CVV",
+]
+
+_missing = [k for k in _REQUIRED_ENV if not os.getenv(k)]
+if _missing:
+    print("❌ 缺少以下環境變數，請檢查 .env：")
+    for k in _missing:
+        print(f"   - {k}")
+    raise SystemExit(1)
+
 from src.auth import get_session, get_csrf_token
 from src.menu import select_products, print_summary
 from src.poller import wait_for_products
