@@ -1,0 +1,114 @@
+{
+  "products": [
+    {
+      "handle": "pistachioooochocolatebar-20260415114521",
+      "name": "3入組合：超級開心果＋金萱百香＋芝麻米香脆脆",
+      "display_name": "【3入組合：超級開心果＋金萱百香＋芝麻米香脆脆】",
+      "is_combo": true,
+      "price": 1470,
+      "variants": [
+        { "id": 81350324, "title": null }
+      ]
+    },
+    {
+      "handle": "pistachioooochocolatebar-20260410113407",
+      "name": "3入組合：開心榛果脆脆＋焙茶脆脆＋蓮花脆餅脆脆",
+      "display_name": "【3入組合：開心榛果脆脆＋焙茶脆脆＋蓮花脆餅脆脆】",
+      "is_combo": true,
+      "price": 1470,
+      "variants": [
+        { "id": 81276652, "title": null }
+      ]
+    },
+    {
+      "handle": "starwberrycakechoco-20260415114413",
+      "name": "2入組合：草莓蛋糕脆脆＋花生麻糬脆脆",
+      "display_name": "【2入組合：草莓蛋糕脆脆＋花生麻糬脆脆】",
+      "is_combo": true,
+      "price": 980,
+      "variants": [
+        { "id": 81350072, "title": null }
+      ]
+    },
+    {
+      "handle": "pistachioooochocolatebar",
+      "name": "超級開心果脆脆",
+      "display_name": "【超級開心果脆脆】",
+      "is_combo": false,
+      "price": 490,
+      "variants": [
+        { "id": 62230134, "title": null }
+      ]
+    },
+    {
+      "handle": "pistachioooochocolatebar-20251017132457",
+      "name": "金萱百香脆脆",
+      "display_name": "【金萱百香脆脆】",
+      "is_combo": false,
+      "price": 490,
+      "variants": [
+        { "id": 73685259, "title": null }
+      ]
+    },
+    {
+      "handle": "pistachiochocolatebar",
+      "name": "開心榛果脆脆",
+      "display_name": "【開心榛果脆脆】",
+      "is_combo": false,
+      "price": 490,
+      "variants": [
+        { "id": 56464625, "title": null }
+      ]
+    },
+    {
+      "handle": "peanutmochichocobar",
+      "name": "花生麻糬脆脆",
+      "display_name": "【花生麻糬脆脆】",
+      "is_combo": false,
+      "price": 490,
+      "variants": [
+        { "id": 67273447, "title": null }
+      ]
+    },
+    {
+      "handle": "starwberrycakechoco",
+      "name": "草莓蛋糕脆脆",
+      "display_name": "【草莓蛋糕脆脆】",
+      "is_combo": false,
+      "price": 490,
+      "variants": [
+        { "id": 65676764, "title": null }
+      ]
+    },
+    {
+      "handle": "hojichachocolatebar-20250624181805",
+      "name": "焙茶脆脆",
+      "display_name": "【焙茶脆脆】",
+      "is_combo": false,
+      "price": 490,
+      "variants": [
+        { "id": 68157973, "title": null }
+      ]
+    },
+    {
+      "handle": "sesamechocolatebar-20260415114625",
+      "name": "芝麻米香脆脆",
+      "display_name": "【芝麻米香脆脆】",
+      "is_combo": false,
+      "price": 490,
+      "variants": [
+        { "id": 81350576, "title": null }
+      ]
+    },
+    {
+      "handle": "biscoffchocolatebar",
+      "name": "蓮花脆餅脆脆",
+      "display_name": "【蓮花脆餅脆脆】",
+      "is_combo": false,
+      "price": 490,
+      "variants": [
+        { "id": 65951769, "title": null }
+      ]
+    }
+  ]
+}
