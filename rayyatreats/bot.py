@@ -1,7 +1,6 @@
 """rayyatreats checkout bot — main entry point."""
 
 import re
-import subprocess
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -79,12 +78,6 @@ def main() -> None:
     print("  rayyatreats 搶購 Bot")
     print("=" * 50 + "\n")
 
-    # R10: Clear any stale browser session before starting
-    subprocess.run(
-        ["agent-browser", "--session", "rayya", "close"],
-        capture_output=True,
-    )
-
     # Step 1: Login
     session = get_session()
 
@@ -121,7 +114,7 @@ def main() -> None:
 
     # Step 6: Checkout via browser
     try:
-        do_checkout()
+        do_checkout(session)
         print("\n🎉 訂單已送出，等待 3DS 驗證")
         print("   請前往 https://www.rayyatreats.com/account/orders")
         print("   點選「前往付款」完成 3D 驗證")
