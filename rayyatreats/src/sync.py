@@ -236,6 +236,18 @@ def sync(
         print(f"⚠️  無法從網站抓取商品（{e}），使用本地快取")
         return local
 
+    # Safeguard: protect against mass delisting / site anomalies.
+    # When remote drops below half of local (and local had >=2 items), the
+    # cause is more likely a between-sale delist window than a legitimate
+    # weekly refresh — refuse to overwrite and keep the cached list.
+    if local and len(local) >= 2 and len(remote) < max(2, len(local) // 2):
+        print(
+            f"⚠️  遠端商品數 ({len(remote)}) 明顯少於本地 ({len(local)})，"
+            "疑似全數下架或網站異常"
+        )
+        print("   → 保留本地 cache，不覆寫 products.json")
+        return local
+
     delta = diff(remote, local)
     has_changes = any(delta[k] for k in ("added", "removed", "changed"))
 
