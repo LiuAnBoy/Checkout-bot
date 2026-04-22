@@ -69,7 +69,11 @@ def _ask_sale_time() -> datetime:
         raw = input("⏰ 請輸入開賣時間（格式：MM/DD HH:MM，例如 04/23 12:30）：").strip()
         try:
             dt = datetime.strptime(f"{datetime.now(TZ).year}/{raw}", "%Y/%m/%d %H:%M")
-            return dt.replace(tzinfo=TZ)
+            dt = dt.replace(tzinfo=TZ)
+            if dt <= datetime.now(TZ):
+                print("   時間已過，請輸入未來的時間")
+                continue
+            return dt
         except ValueError:
             print("   格式不正確，請重試")
 
@@ -86,7 +90,7 @@ def main() -> None:
     print()
     sale_time = _ask_sale_time()
 
-    # Step 3: Warmup — keep-alive pings while waiting
+    # Step 3: Warmup — keep-alive pings + prefetch CSRF token
     print("\n⏳ 預熱連線中...")
     try:
         session.get("https://www.rayyatreats.com", timeout=10)
@@ -94,6 +98,8 @@ def main() -> None:
         print("✅ 連線預熱完成")
     except Exception:
         print("⚠️  預熱失敗，繼續等待...")
+
+    csrf_token = get_csrf_token(session)
 
     # Step 4: Countdown to sale_time
     while True:
@@ -127,8 +133,7 @@ def main() -> None:
     selected = select_products()
     print_summary(selected)
 
-    # Step 7: Get CSRF token and fire
-    csrf_token = get_csrf_token(session)
+    # Step 7: Fire
     succeeded, failed = fire(session, csrf_token, selected)
 
     if failed:
@@ -141,13 +146,18 @@ def main() -> None:
 
     # Step 8: Checkout via browser
     try:
-        do_checkout(session)
-        print("\n🎉 訂單已送出，等待 3DS 驗證")
-        print("   請前往 https://www.rayyatreats.com/account/orders")
-        print("   點選「前往付款」完成 3D 驗證")
+        ok = do_checkout(session)
     except Exception as e:
         print(f"\n❌ 結帳失敗：{e}")
         print("   請手動前往 https://www.rayyatreats.com/cart 完成結帳")
+        return
+
+    if ok:
+        print("\n🎉 訂單已送出，等待 3DS 驗證")
+        print("   請前往 https://www.rayyatreats.com/account/orders")
+        print("   點選「前往付款」完成 3D 驗證")
+    else:
+        print("\n❌ 結帳未完成，請手動前往 https://www.rayyatreats.com/cart 完成結帳")
 
 
 if __name__ == "__main__":

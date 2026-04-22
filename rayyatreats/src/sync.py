@@ -124,7 +124,17 @@ def fetch_remote_products(
         name = _strip_schedule(display_name)
         combo = _is_combo(display_name)
 
-        variants = _fetch_variant(session, link["url"])
+        # Use a per-call session copy to avoid shared-state races across threads.
+        thread_session = requests.Session()
+        thread_session.cookies.update(session.cookies)
+        thread_session.headers.update(session.headers)
+
+        try:
+            variants = _fetch_variant(thread_session, link["url"])
+        except Exception as e:
+            print(f"⚠️  {name}：variant 抓取例外（{e}），略過")
+            return None
+
         if not variants:
             old = local_map.get(handle, {})
             old_variants = old.get("variants", [])

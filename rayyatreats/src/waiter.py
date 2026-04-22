@@ -72,7 +72,12 @@ def _fire_worker(
     backoff_idx = 0
 
     while not stop_event.is_set() and attempts < MAX_ATTEMPTS_PER_VARIANT:
-        status = _add_to_cart(session, csrf_token, variant_id)
+        try:
+            status = _add_to_cart(session, csrf_token, variant_id)
+        except Exception:
+            _sleep_ms(FIRE_INTERVAL_MS)
+            continue
+
         attempts += 1
 
         if status == 429:
@@ -101,7 +106,8 @@ def _verify_loop(
     while not stop_event.is_set() and time.monotonic() < deadline:
         try:
             cart = _cart_json(session)
-        except Exception:
+        except Exception as e:
+            print(f"⚠️  /cart.json 查詢失敗：{e}")
             _sleep_ms(VERIFY_INTERVAL_MS)
             continue
 
@@ -205,7 +211,8 @@ def fire(
     # Determine succeeded / failed by checking cart
     try:
         cart = _cart_json(session)
-    except Exception:
+    except Exception as e:
+        print(f"⚠️  最終購物車驗證失敗（{e}），結果可能不準確")
         cart = {}
 
     cart_qty_map: dict[int, int] = {
