@@ -53,6 +53,31 @@ for a in soup.select('a[href*="/products/"]'):
 ## Notes
 
 - Product URLs contain timestamp suffixes (e.g., `-20260415114521`) that **change each week**
-- Must re-fetch every time before a Thursday drop
+- **Products only appear on the collection page at exactly 12:30** — pre-fetching before the sale returns empty or stale results (confirmed 2026-04-22)
+- Must fetch at `sale_time`, not before
 - Filter out "RB紙袋" (paper bag, add-on only)
 - Product names contain scheduling info like "4/16 中午12:30開單" — can strip for display
+
+## Fetch Trigger (Updated 2026-04-22)
+
+`fetch_only(session)` is called by `bot.py` at `sale_time`, not during bot startup.
+
+```python
+# bot.py — triggered at sale_time
+products = fetch_only(session)   # parallel product+variant fetch
+save_local(products)             # update local cache
+selected = select_products()     # user picks from the fetched list
+```
+
+`fetch_only` calls `fetch_remote_products(session, local=[])` with no local fallback — if a variant can't be fetched, that product is skipped silently.
+
+## Parallelization
+
+`fetch_remote_products` uses `ThreadPoolExecutor(max_workers=8)` to fetch all product pages concurrently:
+
+```python
+with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+    results = list(executor.map(_fetch_one, links))
+```
+
+Target: 6 products × ~30ms per page = ~30–200ms total (vs. ~600ms sequential).

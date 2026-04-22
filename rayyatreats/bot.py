@@ -1,6 +1,7 @@
 """rayyatreats checkout bot — main entry point."""
 
 import re
+import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -30,8 +31,8 @@ if _missing:
 
 from src.auth import get_session, get_csrf_token
 from src.menu import select_products, print_summary, Product
-from src.sync import sync
-from src.waiter import wait_and_fire
+from src.sync import fetch_only, save_local
+from src.waiter import fire
 from src.checkout import do_checkout
 
 
@@ -81,28 +82,54 @@ def main() -> None:
     # Step 1: Login
     session = get_session()
 
-    # Step 2: Sync products from website
+    # Step 2: Ask sale time
     print()
-    current_products = sync(session, interactive=True)
+    sale_time = _ask_sale_time()
 
-    # Step 3: Product selection menu
+    # Step 3: Warmup — keep-alive pings while waiting
+    print("\n⏳ 預熱連線中...")
+    try:
+        session.get("https://www.rayyatreats.com", timeout=10)
+        session.get("https://www.rayyatreats.com/cart.json", timeout=5)
+        print("✅ 連線預熱完成")
+    except Exception:
+        print("⚠️  預熱失敗，繼續等待...")
+
+    # Step 4: Countdown to sale_time
+    while True:
+        now = datetime.now(TZ)
+        delta = (sale_time - now).total_seconds()
+        if delta <= 0:
+            break
+        m, s = divmod(int(delta), 60)
+        print(f"\r⏰ 距開賣 {m:02d}:{s:02d}  ", end="", flush=True)
+        time.sleep(0.5)
     print()
+
+    # Step 5: Fetch products at sale time
+    sale_ts = time.time()
+    print("🔍 抓取商品中...")
+    try:
+        products = fetch_only(session)
+    except Exception as e:
+        print(f"❌ 商品抓取失敗：{e}")
+        return
+
+    if not products:
+        print("❌ 沒有商品可購買，結束")
+        return
+
+    save_local(products)
+
+    # Step 6: Show elapsed + product selection menu
+    elapsed = time.time() - sale_ts
+    print(f"⏱  距開賣 +{elapsed:.1f}s，共 {len(products)} 項商品\n")
     selected = select_products()
     print_summary(selected)
 
-    # Step 4: Confirm sale time
-    sale_time = _parse_sale_time(selected)
-    if sale_time:
-        print(f"\n🕐 偵測到開賣時間：{sale_time.strftime('%Y-%m-%d %H:%M:%S')}")
-        ans = input("   確認？[Y/n] ").strip().lower()
-        if ans not in ("", "y", "yes"):
-            sale_time = _ask_sale_time()
-    else:
-        sale_time = _ask_sale_time()
-
-    # Step 5: Get CSRF token and fire
+    # Step 7: Get CSRF token and fire
     csrf_token = get_csrf_token(session)
-    succeeded, failed = wait_and_fire(session, csrf_token, selected, sale_time)
+    succeeded, failed = fire(session, csrf_token, selected)
 
     if failed:
         names = "、".join(p.name for p in failed)
@@ -112,7 +139,7 @@ def main() -> None:
         print("❌ 沒有商品成功加入購物車，結束")
         return
 
-    # Step 6: Checkout via browser
+    # Step 8: Checkout via browser
     try:
         do_checkout(session)
         print("\n🎉 訂單已送出，等待 3DS 驗證")

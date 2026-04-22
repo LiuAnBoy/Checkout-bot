@@ -2,20 +2,16 @@
 
 import threading
 import time
-from datetime import datetime
 from typing import Any
 
 import requests
 
 from .config import (
     BACKOFF_429_MS,
-    FINAL_CHECK_LEAD_S,
     FIRE_INTERVAL_MS,
-    FIRE_LEAD_S,
     MAX_ATTEMPTS_PER_VARIANT,
     OVERALL_TIMEOUT_S,
     VERIFY_INTERVAL_MS,
-    WARMUP_LEAD_S,
 )
 from .menu import Product
 
@@ -57,42 +53,6 @@ def _add_to_cart(
         timeout=5,
     )
     return resp.status_code
-
-
-# ---------------------------------------------------------------------------
-# Warmup
-# ---------------------------------------------------------------------------
-
-
-def _warmup(session: requests.Session, products: list[Product], sale_ts: float) -> None:
-    """Pre-warm TCP/TLS at T-30s."""
-    now = time.time()
-    target = sale_ts - WARMUP_LEAD_S
-    if target > now:
-        wait = target - now
-        print(f"⏳ 距開賣 {int(sale_ts - now)}s，等待預熱時間...")
-        time.sleep(wait)
-
-    # GET one product page to warm connection
-    warmup_url = f"{BASE_URL}/products/{products[0].handle}"
-    try:
-        session.get(warmup_url, timeout=10)
-        print(f"🔥 預熱完成（{products[0].name}）")
-    except Exception:
-        pass  # non-fatal
-
-
-def _final_check(session: requests.Session, sale_ts: float) -> None:
-    """GET /cart.json at T-5s to confirm session alive."""
-    now = time.time()
-    target = sale_ts - FINAL_CHECK_LEAD_S
-    if target > now:
-        time.sleep(target - now)
-    try:
-        cart = _cart_json(session)
-        print(f"✅ Session 存活，購物車現有 {cart.get('item_count', 0)} 件")
-    except Exception as e:
-        print(f"⚠️  最後確認失敗：{e}")
 
 
 # ---------------------------------------------------------------------------
@@ -172,37 +132,21 @@ def _verify_loop(
 # ---------------------------------------------------------------------------
 
 
-def wait_and_fire(
+def fire(
     session: requests.Session,
     csrf_token: str,
     selected: list[Product],
-    sale_time: datetime,
 ) -> tuple[list[Product], list[Product]]:
-    """Wait for sale_time, fire workers, verify cart.
+    """Fire /cart/add workers immediately and verify with /cart.json.
 
     Args:
         session: Authenticated requests.Session.
         csrf_token: CSRF token for POST requests.
         selected: Products the user wants to buy.
-        sale_time: Exact datetime when sale opens.
 
     Returns:
         (succeeded, failed) lists of Products.
     """
-    sale_ts = sale_time.timestamp()
-
-    print(f"\n🕐 開賣時間：{sale_time.strftime('%Y-%m-%d %H:%M:%S')}")
-
-    # Pre-sale warmup
-    _warmup(session, selected, sale_ts)
-    _final_check(session, sale_ts)
-
-    # Wait until T-FIRE_LEAD_S
-    fire_at = sale_ts - FIRE_LEAD_S
-    now = time.time()
-    if fire_at > now:
-        time.sleep(fire_at - now)
-
     print("\n🚀 開始搶購！")
 
     # Collect all variants (one worker per variant)
@@ -250,7 +194,7 @@ def wait_and_fire(
     # Launch verify loop
     deadline = time.monotonic() + OVERALL_TIMEOUT_S
     expected = sum(p.quantity for p in selected)
-    final_count = _verify_loop(
+    _verify_loop(
         session, expected, global_stop, per_variant_stops, variant_qty, deadline
     )
 

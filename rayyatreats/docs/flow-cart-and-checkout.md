@@ -335,17 +335,35 @@ After 3D cancellation/closure:
 
 ---
 
-## Bot Strategy (Final)
+## Bot Strategy (Updated 2026-04-22)
 
-### Time-Critical Phase (automated, ~2-5 seconds)
+### Pre-sale Phase (~12:20 startup)
 
 ```
 1. Login → get session cookie + CSRF token
-2. POST /cart/add for each variant → items in cart
-3. Navigate to /cart → handle cart_conflict → reach checkout
-4. Select shipping (宅配 > 常溫)
-5. Fill credit card (iframe keyboard method)
-6. Click "立即結帳"
+2. Ask sale time (user input)
+3. Warmup: GET homepage + /cart.json to keep TCP alive
+4. Countdown to sale_time
+```
+
+### At sale_time (T+0)
+
+```
+5. fetch_only(session) — parallel fetch all products + variant IDs (~200–400ms)
+6. Show interactive menu + elapsed time counter
+7. User selects products → Enter
+8. fire(session, csrf_token, selected) — immediate POST /cart/add (no lead time)
+```
+
+No pre-sale warmup or lead-time delay — `fire()` is called immediately after Enter.
+
+### Checkout Phase (~T+3–11s)
+
+```
+9. Navigate to /cart → handle cart_conflict → reach checkout
+10. Select shipping (宅配 > 冷凍)
+11. Fill credit card (Playwright frame_locator)
+12. Click "立即結帳"
 ```
 
 **→ Order is created. Items are reserved. Bot's job is DONE.**

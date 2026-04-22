@@ -1,5 +1,6 @@
 """Product sync — fetch remote products and keep data/products.json up to date."""
 
+import concurrent.futures
 import json
 import re
 import sys
@@ -116,9 +117,8 @@ def fetch_remote_products(
     """
     links = _fetch_product_links(session)
     local_map = {p["handle"]: p for p in (local or [])}
-    products = []
 
-    for link in links:
+    def _fetch_one(link: dict[str, str]) -> dict[str, Any] | None:
         handle = link["handle"]
         display_name = link["display_name"]
         name = _strip_schedule(display_name)
@@ -133,21 +133,34 @@ def fetch_remote_products(
                 variants = old_variants
             else:
                 print(f"⚠️  {name}：variant 抓取失敗且無本地備份，略過")
-                continue
+                return None
 
         price = _infer_price(display_name, variants)
+        return {
+            "handle": handle,
+            "name": name,
+            "display_name": display_name,
+            "is_combo": combo,
+            "price": price,
+            "variants": variants,
+        }
 
-        products.append(
-            {
-                "handle": handle,
-                "name": name,
-                "display_name": display_name,
-                "is_combo": combo,
-                "price": price,
-                "variants": variants,
-            }
-        )
-    return products
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+        results = list(executor.map(_fetch_one, links))
+
+    return [r for r in results if r is not None]
+
+
+def fetch_only(session: requests.Session) -> list[dict[str, Any]]:
+    """Fetch products at sale time without diff, save, or interaction.
+
+    Args:
+        session: Authenticated requests.Session.
+
+    Returns:
+        List of product dicts matching the products.json schema.
+    """
+    return fetch_remote_products(session, local=[])
 
 
 # ---------------------------------------------------------------------------

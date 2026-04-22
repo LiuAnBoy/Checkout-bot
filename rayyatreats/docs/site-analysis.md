@@ -10,6 +10,13 @@
 - Every **Thursday at 12:30 PM (UTC+8)**
 - Ships within 5 business days (skip Sun/Mon)
 
+## Product Availability Behaviour (Confirmed 2026-04-22)
+
+- **Products are NOT pre-listed before the sale.** The entire collection (except RB紙袋) disappears between drops and re-appears at exactly 12:30.
+- Confirmed by owner: "12:30 才會看到商品"
+- Pre-fetching variant IDs before 12:30 returns stale data from the previous week. Using those IDs for `/cart/add` at 12:30 causes all requests to fail.
+- **The bot must fetch product/variant data at `sale_time`, not during startup.** See `flow-fetch-products.md`.
+
 ## Product: 3-pack Combo (Pistachio + Oolong + Sesame)
 
 | Field             | Value                                              |
