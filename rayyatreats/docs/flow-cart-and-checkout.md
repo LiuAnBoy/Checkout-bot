@@ -227,58 +227,43 @@ Main page (rayyatreats.com)
 
 ### Browser Automation: Filling Credit Card via iframe
 
-The iframe is cross-origin, so **normal DOM access is blocked**. However, keyboard-based input works:
+The iframe is cross-origin. Playwright's `frame_locator` accesses it via CDP,
+bypassing same-origin restrictions.
 
-#### Method: Shift+Tab navigation from card holder name field
+#### Current approach: Playwright `frame_locator`
 
-```
-1. Fill card holder name (main page field, normal fill)
-2. Click on card holder name field to ensure focus
-3. Press Shift+Tab × 3 to navigate UP into iframe → lands on card number field
-4. Press each digit key one by one (e.g., press "5", press "4", press "0", press "8", ...)
-5. Press Tab → moves to expiry field
-6. Press digit keys for MM then YY (e.g., "1", "2", "3", "0")
-7. Press Tab → moves to CVV field
-8. Press digit keys for CVV (e.g., "8", "3", "1")
+```python
+iframe = page.frame_locator("iframe#cyberbizpay-main-iframe")
+iframe.locator("#card-number").fill(cc_number)
+iframe.locator("#expire-date").fill(cc_expiry)   # MMYY e.g. "1230"
+iframe.locator("#cvc").fill(cc_cvv)
 ```
 
-#### agent-browser Commands
+Selector IDs (inside iframe):
+- `#card-number` — card number input
+- `#expire-date` — MM/YY input
+- `#cvc` — 3-digit CVV
 
-```bash
-# 1. Fill card holder name (main page)
-agent-browser --session NAME fill @REF_CARD_HOLDER "CHEN LU AN"
+The main-page card holder input remains a normal `<input>`:
+- `input[name="credit_card[card_holder_name]"]`
 
-# 2. Click card holder name to set focus
-agent-browser --session NAME click @REF_CARD_HOLDER
+The save-card checkbox:
+- `#save-my-card` — saves card to account for next purchase
 
-# 3. Shift+Tab × 3 to reach card number in iframe
-agent-browser --session NAME press Shift+Tab
-agent-browser --session NAME press Shift+Tab
-agent-browser --session NAME press Shift+Tab
+See `src/checkout.py` and selector constants in `src/config.py`.
 
-# 4. Type card number digit by digit
-for digit in 5 4 0 8 0 5 9 1 1 9 6 1 1 4 6 8; do
-  agent-browser --session NAME press $digit
-done
+#### Legacy: agent-browser 28-press workaround (removed)
 
-# 5. Tab to expiry, type MM YY
-agent-browser --session NAME press Tab
-for digit in 1 2 3 0; do
-  agent-browser --session NAME press $digit
-done
+Before the Playwright migration, the bot used `agent-browser` to fill the
+iframe via 28 individual `press` commands (Shift+Tab into the iframe, then
+digit-by-digit). This took 5–6 seconds. With `frame_locator().fill()` the
+same work completes in under 100ms.
 
-# 6. Tab to CVV, type 3 digits
-agent-browser --session NAME press Tab
-for digit in 8 3 1; do
-  agent-browser --session NAME press $digit
-done
-```
+Constraints that forced the old approach:
+- `agent-browser fill` / `type` do NOT work on cross-origin iframe fields
+- `agent-browser snapshot` cannot see inside cross-origin iframes
 
-**Important notes:**
-- `agent-browser fill` and `agent-browser type` do NOT work on cross-origin iframe fields
-- `agent-browser keyboard type` command does NOT exist — use `press` for each key
-- `agent-browser snapshot` cannot see elements inside cross-origin iframes
-- The Shift+Tab count (3) may vary if page layout changes — verify with screenshot
+These limits no longer apply — Playwright solves both.
 
 ### 3D Secure Verification Flow
 
@@ -309,8 +294,13 @@ rayyatreats.com/carts/{id}
 
 The 3D verification page is inside **nested cross-origin iframes**:
 - `nmpi.ctbcbank.com` → `challengeMethodIframe` → bank OTP page
-- `agent-browser` snapshot/click/press/Tab/coordinate-click ALL fail on this page
-- **Cannot automate 3D verification programmatically**
+- Playwright `frame_locator` can reach the outer `challengeMethodIframe`, but
+  the inner bank OTP page is issuer-controlled and varies by card; SMS OTP
+  entry is not automated.
+- **Bot does not automate 3D verification.** It detects the redirect to
+  `ctbcbank.com` as success signal (order created), then closes the browser.
+  The user completes 3D-Secure manually via
+  `/account/orders` → 「前往付款」.
 
 ### Key Discovery: Order Lifecycle
 
