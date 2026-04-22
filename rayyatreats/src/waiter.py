@@ -106,7 +106,6 @@ def _fire_worker(
     product: Product,
     variant_id: int,
     stop_event: threading.Event,
-    success_event: threading.Event,
 ) -> None:
     """Per-variant fire loop: POST /cart/add at FIRE_INTERVAL_MS until done."""
     attempts = 0
@@ -124,7 +123,7 @@ def _fire_worker(
             backoff_idx = 0
             _sleep_ms(FIRE_INTERVAL_MS)
 
-    if attempts >= MAX_ATTEMPTS_PER_VARIANT and not success_event.is_set():
+    if attempts >= MAX_ATTEMPTS_PER_VARIANT and not stop_event.is_set():
         print(f"   ⚠️  {product.name}：已達最大嘗試次數 ({MAX_ATTEMPTS_PER_VARIANT})")
 
 
@@ -133,6 +132,7 @@ def _verify_loop(
     expected_count: int,
     stop_event: threading.Event,
     per_variant_stops: dict[int, threading.Event],
+    variant_qty: dict[int, int],
     deadline: float,
 ) -> int:
     """Poll /cart.json every VERIFY_INTERVAL_MS. Returns final item_count."""
@@ -148,13 +148,12 @@ def _verify_loop(
         count = cart.get("item_count", 0)
 
         if count > prev_count:
-            # Figure out which variants are now in cart and signal their workers
-            cart_variant_ids = {
-                item["variant_id"]
+            cart_qty: dict[int, int] = {
+                item["variant_id"]: item["quantity"]
                 for item in cart.get("items", [])
             }
             for vid, evt in per_variant_stops.items():
-                if vid in cart_variant_ids and not evt.is_set():
+                if not evt.is_set() and cart_qty.get(vid, 0) >= variant_qty[vid]:
                     evt.set()
             prev_count = count
 
@@ -214,10 +213,10 @@ def wait_and_fire(
 
     # Events
     global_stop = threading.Event()
-    any_success = threading.Event()
     per_variant_stops: dict[int, threading.Event] = {
         vid: threading.Event() for vid in variant_map
     }
+    variant_qty: dict[int, int] = {vid: variant_map[vid].quantity for vid in variant_map}
 
     # Merge per-variant stop into worker stop event
     combined_stops: dict[int, threading.Event] = {}
@@ -242,7 +241,7 @@ def wait_and_fire(
     for vid, product in variant_map.items():
         t = threading.Thread(
             target=_fire_worker,
-            args=(session, csrf_token, product, vid, combined_stops[vid], any_success),
+            args=(session, csrf_token, product, vid, combined_stops[vid]),
             daemon=True,
         )
         t.start()
@@ -252,7 +251,7 @@ def wait_and_fire(
     deadline = time.monotonic() + OVERALL_TIMEOUT_S
     expected = sum(p.quantity for p in selected)
     final_count = _verify_loop(
-        session, expected, global_stop, per_variant_stops, deadline
+        session, expected, global_stop, per_variant_stops, variant_qty, deadline
     )
 
     # Wait for fire threads to finish
@@ -265,14 +264,16 @@ def wait_and_fire(
     except Exception:
         cart = {}
 
-    cart_variant_ids = {
-        item["variant_id"] for item in cart.get("items", [])
+    cart_qty_map: dict[int, int] = {
+        item["variant_id"]: item["quantity"]
+        for item in cart.get("items", [])
     }
 
     succeeded_set: set[Product] = set()
-    for vid in cart_variant_ids:
-        if vid in variant_map:
-            succeeded_set.add(variant_map[vid])
+    for p in selected:
+        total = sum(cart_qty_map.get(v["id"], 0) for v in p.variants)
+        if total >= p.quantity:
+            succeeded_set.add(p)
 
     succeeded = [p for p in selected if p in succeeded_set]
     failed = [p for p in selected if p not in succeeded_set]

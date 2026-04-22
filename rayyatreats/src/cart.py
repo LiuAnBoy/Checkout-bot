@@ -16,9 +16,9 @@ def _add_one(
     variant_id: int,
     quantity: int,
 ) -> bool:
-    """POST /cart/add for a single variant. Returns True if request succeeded."""
+    """POST /cart/add for a single variant. Returns True if all requests succeeded."""
     for _ in range(quantity):
-        session.post(
+        resp = session.post(
             f"{BASE_URL}/cart/add",
             data={"id": variant_id, "quantity": 1},
             headers={
@@ -28,6 +28,8 @@ def _add_one(
             },
             timeout=10,
         )
+        if not resp.ok:
+            return False
     return True
 
 
@@ -88,15 +90,19 @@ def add_products_to_cart(
     total_price = cart.get("total_price", 0)
     print(f"\n✅ 購物車驗證：{item_count} 件，NT${total_price // 100 if total_price > 1000 else total_price}")
 
-    cart_variant_ids = {
-        item["variant_id"] for item in cart.get("items", [])
+    cart_qty_map: dict[int, int] = {
+        item["variant_id"]: item["quantity"]
+        for item in cart.get("items", [])
     }
 
     succeeded: list[Product] = []
     failed: list[Product] = list(no_variant)
 
     for p, vid in tasks:
-        if vid in cart_variant_ids:
+        if not post_results.get(p, False):
+            print(f"   ⚠️  {p.name} POST 失敗（{vid}）")
+            failed.append(p)
+        elif cart_qty_map.get(vid, 0) >= p.quantity:
             succeeded.append(p)
         else:
             print(f"   ⚠️  {p.name} 未進入購物車（可能已售完）")

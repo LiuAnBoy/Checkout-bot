@@ -3,6 +3,9 @@
 import re
 import subprocess
 from datetime import datetime
+from zoneinfo import ZoneInfo
+
+TZ = ZoneInfo("Asia/Taipei")
 
 from dotenv import load_dotenv
 
@@ -35,19 +38,28 @@ from src.checkout import do_checkout
 
 def _parse_sale_time(products: list[Product]) -> datetime | None:
     """Try to parse sale time from product display_names (e.g. '4/23 中午12:30開單')."""
+    now = datetime.now(TZ)
     for p in products:
         m = re.search(
-            r"(\d{1,2})/(\d{1,2})\s*(?:中午|下午|早上)?(\d{1,2}):(\d{2})開單",
+            r"(\d{1,2})/(\d{1,2})\s*(早上|中午|下午)?(\d{1,2}):(\d{2})開單",
             p.display_name,
         )
         if m:
-            month, day, hour, minute = (
+            month, day, meridiem, hour, minute = (
                 int(m.group(1)),
                 int(m.group(2)),
-                int(m.group(3)),
+                m.group(3),
                 int(m.group(4)),
+                int(m.group(5)),
             )
-            return datetime(datetime.now().year, month, day, hour, minute, 0)
+            if meridiem == "下午" and hour < 12:
+                hour += 12
+            elif meridiem == "早上" and hour == 12:
+                hour = 0
+            sale_time = datetime(now.year, month, day, hour, minute, 0, tzinfo=TZ)
+            if (sale_time - now).total_seconds() < -86400:
+                sale_time = sale_time.replace(year=now.year + 1)
+            return sale_time
     return None
 
 
@@ -56,7 +68,8 @@ def _ask_sale_time() -> datetime:
     while True:
         raw = input("⏰ 請輸入開賣時間（格式：MM/DD HH:MM，例如 04/23 12:30）：").strip()
         try:
-            return datetime.strptime(f"{datetime.now().year}/{raw}", "%Y/%m/%d %H:%M")
+            dt = datetime.strptime(f"{datetime.now(TZ).year}/{raw}", "%Y/%m/%d %H:%M")
+            return dt.replace(tzinfo=TZ)
         except ValueError:
             print("   格式不正確，請重試")
 
@@ -85,7 +98,7 @@ def main() -> None:
     print_summary(selected)
 
     # Step 4: Confirm sale time
-    sale_time = _parse_sale_time(current_products)
+    sale_time = _parse_sale_time(selected)
     if sale_time:
         print(f"\n🕐 偵測到開賣時間：{sale_time.strftime('%Y-%m-%d %H:%M:%S')}")
         ans = input("   確認？[Y/n] ").strip().lower()

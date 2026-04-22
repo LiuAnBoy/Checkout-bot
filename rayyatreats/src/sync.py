@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import requests
+from bs4 import BeautifulSoup
 
 BASE_URL = "https://www.rayyatreats.com"
 COLLECTION_URL = f"{BASE_URL}/collections/all"
@@ -25,10 +26,15 @@ def _fetch_product_links(session: requests.Session) -> list[dict[str, str]]:
 
     seen: set[str] = set()
     products = []
+    soup = BeautifulSoup(resp.text, "html.parser")
 
-    # Simple regex: extract all /products/<handle> hrefs and their anchor text
-    for m in re.finditer(r'href="(/products/([^"?]+))"[^>]*>([^<]+)<', resp.text):
-        href, handle, raw_name = m.group(1), m.group(2), m.group(3).strip()
+    for a in soup.select('a[href*="/products/"]'):
+        href = a.get("href", "")
+        m = re.match(r"/products/([^/?#]+)", href)
+        if not m:
+            continue
+        handle = m.group(1)
+        raw_name = a.get_text(strip=True)
         if not raw_name or len(raw_name) < 5:
             continue
         if "紙袋" in raw_name or handle in seen:
@@ -47,11 +53,11 @@ def _strip_schedule(display_name: str) -> str:
 
 
 def _fetch_variant(session: requests.Session, url: str) -> list[dict[str, Any]]:
-    """Extract variant list from a product page."""
+    """Extract variant list (with price) from a product page."""
     resp = session.get(url, timeout=10)
     resp.raise_for_status()
 
-    # Try full variants block first
+    # Try full variants block first (JSON embedded in page)
     m = re.search(
         r'"variants":\[(\{.+?\})\]',
         resp.text,
@@ -61,7 +67,11 @@ def _fetch_variant(session: requests.Session, url: str) -> list[dict[str, Any]]:
         try:
             variants_raw = json.loads("[" + m.group(1) + "]")
             return [
-                {"id": v["id"], "title": v.get("option1")}
+                {
+                    "id": v["id"],
+                    "title": v.get("option1"),
+                    "price": int(float(v["price"])) if "price" in v else None,
+                }
                 for v in variants_raw
             ]
         except (json.JSONDecodeError, KeyError):
@@ -70,7 +80,7 @@ def _fetch_variant(session: requests.Session, url: str) -> list[dict[str, Any]]:
     # Fallback: grab first variant id only
     m2 = re.search(r'"variants":\[\{"id":(\d+)', resp.text)
     if m2:
-        return [{"id": int(m2.group(1)), "title": None}]
+        return [{"id": int(m2.group(1)), "title": None, "price": None}]
 
     return []
 
@@ -80,7 +90,10 @@ def _is_combo(display_name: str) -> bool:
 
 
 def _infer_price(display_name: str, variants: list[dict]) -> int:
-    """Best-effort price from display name keywords; fallback to 490."""
+    """Price from variant JSON if available; fallback to keyword inference."""
+    for v in variants:
+        if v.get("price") is not None:
+            return v["price"]
     if "3入組合" in display_name:
         return 1470
     if "2入組合" in display_name:
@@ -88,17 +101,23 @@ def _infer_price(display_name: str, variants: list[dict]) -> int:
     return 490
 
 
-def fetch_remote_products(session: requests.Session) -> list[dict[str, Any]]:
+def fetch_remote_products(
+    session: requests.Session,
+    local: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
     """Fetch all products (excluding NG) from the website.
 
     Args:
         session: Authenticated requests.Session.
+        local: Existing local products for variant fallback on fetch failure.
 
     Returns:
         List of product dicts matching the products.json schema.
     """
     links = _fetch_product_links(session)
+    local_map = {p["handle"]: p for p in (local or [])}
     products = []
+
     for link in links:
         handle = link["handle"]
         display_name = link["display_name"]
@@ -106,6 +125,16 @@ def fetch_remote_products(session: requests.Session) -> list[dict[str, Any]]:
         combo = _is_combo(display_name)
 
         variants = _fetch_variant(session, link["url"])
+        if not variants:
+            old = local_map.get(handle, {})
+            old_variants = old.get("variants", [])
+            if old_variants:
+                print(f"⚠️  {name}：variant 抓取失敗，保留舊資料")
+                variants = old_variants
+            else:
+                print(f"⚠️  {name}：variant 抓取失敗且無本地備份，略過")
+                continue
+
         price = _infer_price(display_name, variants)
 
         products.append(
@@ -202,7 +231,7 @@ def sync(
     local = load_local_products()
 
     try:
-        remote = fetch_remote_products(session)
+        remote = fetch_remote_products(session, local=local)
     except Exception as e:
         print(f"⚠️  無法從網站抓取商品（{e}），使用本地快取")
         return local
