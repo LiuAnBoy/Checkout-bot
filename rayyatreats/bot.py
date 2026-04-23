@@ -30,19 +30,16 @@ if _missing:
 
 from src.auth import get_session, get_csrf_token
 from src.menu import select_products, print_summary
-from src.sync import fetch_only, save_local
+from src.sync import sync as sync_products
 from src.waiter import fire
 from src.checkout import do_checkout
 
 
 def _next_sale_time() -> datetime:
-    """Return the next Thursday 12:30 Asia/Taipei."""
+    """Return this week's Thursday 12:30 Asia/Taipei (may be in the past)."""
     now = datetime.now(TZ)
-    days_until_thursday = (3 - now.weekday()) % 7  # 3 = Thursday
-    candidate = now.replace(hour=12, minute=30, second=0, microsecond=0) + timedelta(days=days_until_thursday)
-    if candidate <= now:
-        candidate += timedelta(weeks=1)
-    return candidate
+    days_until_thursday = (3 - now.weekday()) % 7  # 0..6, keeps current week
+    return now.replace(hour=12, minute=30, second=0, microsecond=0) + timedelta(days=days_until_thursday)
 
 
 def main() -> None:
@@ -56,18 +53,25 @@ def main() -> None:
     # Step 1: Login
     session = get_session()
 
-    # Step 2: Warmup — keep-alive pings + prefetch CSRF token
+    # Step 2: Warmup — keep-alive pings + refresh product cache + prefetch CSRF
     print("\n⏳ 預熱連線中...")
     try:
         session.get("https://www.rayyatreats.com", timeout=10)
         session.get("https://www.rayyatreats.com/cart.json", timeout=5)
         print("✅ 連線預熱完成")
     except Exception:
-        print("⚠️  預熱失敗，繼續等待...")
+        print("⚠️  預熱失敗，繼續...")
+
+    print("\n🔄 同步商品資料...")
+    sync_products(session, interactive=False)
 
     csrf_token = get_csrf_token(session)
 
-    # Step 3: Countdown to sale_time
+    # Step 3: Product selection — user picks items before countdown
+    selected = select_products()
+    print_summary(selected)
+
+    # Step 4: Countdown to sale_time
     while True:
         now = datetime.now(TZ)
         delta = (sale_time - now).total_seconds()
@@ -78,28 +82,7 @@ def main() -> None:
         time.sleep(0.5)
     print()
 
-    # Step 4: Fetch products at sale time
-    sale_ts = time.time()
-    print("🔍 抓取商品中...")
-    try:
-        products = fetch_only(session)
-    except Exception as e:
-        print(f"❌ 商品抓取失敗：{e}")
-        return
-
-    if not products:
-        print("❌ 沒有商品可購買，結束")
-        return
-
-    save_local(products)
-
-    # Step 5: Show elapsed + product selection menu
-    elapsed = time.time() - sale_ts
-    print(f"⏱  距開賣 +{elapsed:.1f}s，共 {len(products)} 項商品\n")
-    selected = select_products()
-    print_summary(selected)
-
-    # Step 6: Fire
+    # Step 5: Fire immediately at sale time
     succeeded, failed = fire(session, csrf_token, selected)
 
     if failed:
@@ -110,7 +93,7 @@ def main() -> None:
         print("❌ 沒有商品成功加入購物車，結束")
         return
 
-    # Step 7: Checkout via browser
+    # Step 6: Checkout via browser
     try:
         ok = do_checkout(session)
     except Exception as e:

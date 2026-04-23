@@ -47,9 +47,9 @@ def _fetch_product_links(session: requests.Session) -> list[dict[str, str]]:
 
 
 def _strip_schedule(display_name: str) -> str:
-    """Remove scheduling suffixes like '4/23 中午12:30開單' and 【】 brackets."""
-    name = display_name.strip("【】")
-    name = re.sub(r"\s*\d+/\d+\s*[^\s]*開單.*$", "", name).strip()
+    """Remove scheduling suffixes like '（4/23 中午12:30開單）' and 【】 brackets."""
+    name = re.sub(r"[【】]", "", display_name)
+    name = re.sub(r"（[^）]*\d+/\d+[^）]*開單[^）]*）", "", name).strip()
     return name
 
 
@@ -171,6 +171,27 @@ def fetch_only(session: requests.Session) -> list[dict[str, Any]]:
         List of product dicts matching the products.json schema.
     """
     return fetch_remote_products(session, local=[])
+
+
+def fetch_variant_id(session: requests.Session, handle: str) -> int | None:
+    """Fetch the first variant_id for a product handle via the JSON API.
+
+    Args:
+        session: Authenticated requests.Session.
+        handle: Product handle (slug).
+
+    Returns:
+        First variant id, or None on failure.
+    """
+    try:
+        resp = session.get(f"{BASE_URL}/products/{handle}.json", timeout=5)
+        resp.raise_for_status()
+        variants = resp.json().get("product", {}).get("variants", [])
+        if variants:
+            return variants[0]["id"]
+    except Exception:
+        pass
+    return None
 
 
 # ---------------------------------------------------------------------------

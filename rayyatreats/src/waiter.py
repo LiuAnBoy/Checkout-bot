@@ -14,6 +14,7 @@ from .config import (
     VERIFY_INTERVAL_MS,
 )
 from .menu import Product
+from .sync import fetch_variant_id
 
 BASE_URL = "https://www.rayyatreats.com"
 
@@ -70,17 +71,28 @@ def _fire_worker(
     """Per-variant fire loop: POST /cart/add at FIRE_INTERVAL_MS until done."""
     attempts = 0
     backoff_idx = 0
+    vid = variant_id
+    refetched = False
 
     while not stop_event.is_set() and attempts < MAX_ATTEMPTS_PER_VARIANT:
         try:
-            status = _add_to_cart(session, csrf_token, variant_id)
+            status = _add_to_cart(session, csrf_token, vid)
         except Exception:
             _sleep_ms(FIRE_INTERVAL_MS)
             continue
 
         attempts += 1
 
-        if status == 429:
+        if status in (404, 422) and not refetched:
+            refetched = True
+            fresh = fetch_variant_id(session, product.handle)
+            if fresh and fresh != vid:
+                print(f"\n   🔄 {product.name}：variant {vid}→{fresh}（just-fetched），重試")
+                vid = fresh
+            else:
+                print(f"\n   ⚠️  {product.name}：{status}，variant_id 未變，繼續重試")
+            _sleep_ms(FIRE_INTERVAL_MS)
+        elif status == 429:
             delay = BACKOFF_429_MS[min(backoff_idx, len(BACKOFF_429_MS) - 1)]
             backoff_idx += 1
             _sleep_ms(delay)

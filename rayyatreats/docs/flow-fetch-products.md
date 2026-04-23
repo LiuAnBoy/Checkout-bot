@@ -58,18 +58,27 @@ for a in soup.select('a[href*="/products/"]'):
 - Filter out "RB紙袋" (paper bag, add-on only)
 - Product names contain scheduling info like "4/16 中午12:30開單" — can strip for display
 
-## Fetch Trigger (Updated 2026-04-22)
+## Fetch Trigger (Updated 2026-04-23)
 
-`fetch_only(session)` is called by `bot.py` at `sale_time`, not during bot startup.
+`sync(session, interactive=False)` is called by `bot.py` during **warmup**, before the menu and countdown.
 
 ```python
-# bot.py — triggered at sale_time
-products = fetch_only(session)   # parallel product+variant fetch
-save_local(products)             # update local cache
-selected = select_products()     # user picks from the fetched list
+# bot.py — triggered at warmup (before menu)
+sync_products(session, interactive=False)  # refresh cache; fallback to local on failure
+selected = select_products()               # user picks from cached products
+# ... countdown ...
+fire(session, csrf_token, selected)        # fire directly at T+0, no product fetch
 ```
 
-`fetch_only` calls `fetch_remote_products(session, local=[])` with no local fallback — if a variant can't be fetched, that product is skipped silently.
+The mass-delist guard in `sync()` prevents overwriting the cache when the site is in the between-sale delist window (Wednesday after midnight until Thursday 12:30).
+
+## Variant ID Stability (Discovered 2026-04-23)
+
+Handles and variant_ids are **stable across weeks** — only `display_name` suffixes like `4/23 中午12:30開單` change. This means:
+- The cache from the previous sale is valid for firing at `T+0`
+- No fetch is needed at sale time; the bot fires immediately from the cached variant_ids
+
+If a variant_id is rejected (HTTP 422/404), `_fire_worker` re-fetches via `/products/{handle}.json` and retries once — see `src/waiter.py` and `src/sync.py:fetch_variant_id`.
 
 ## Parallelization
 

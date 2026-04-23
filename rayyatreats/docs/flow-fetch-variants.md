@@ -78,5 +78,16 @@ Href: `/products/ngchocolate-20260415114700`
 - Multi-variant products (like NG): need to parse the full `"variants":[...]` array from HTML
 - The `option1` field contains the variant name for multi-variant products (e.g., "NG超級開心果脆脆")
 - For Python scraping: use `requests` + regex on raw HTML — no need for browser/JS execution
-- Variant IDs and product IDs **may change** when products are re-listed each week
+- **Variant IDs are stable week-to-week** (confirmed 2026-04-23): handles and variant_ids do not change between weekly drops; only `display_name` suffixes change
 - `inventoryQuantity: 0` + `inventoryPolicy: "deny"` = sold out (expected outside of drop time)
+
+## Fallback Re-fetch
+
+If `/cart/add` returns 422 or 404, `_fire_worker` in `src/waiter.py` calls `fetch_variant_id(session, handle)` from `src/sync.py`, which hits the JSON API:
+
+```
+GET /products/{handle}.json
+→ product.variants[0].id
+```
+
+This is faster than HTML parsing and does not require the collection page to be live.
