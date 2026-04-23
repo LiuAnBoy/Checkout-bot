@@ -20,7 +20,6 @@ OVERALL_TIMEOUT_S: float = 30.0
 import os as _os
 
 CHECKOUT_HEADLESS: bool = _os.getenv("HEADLESS", "false").lower() == "true"
-CHECKOUT_3DS_URL_PATTERN: str = "**ctbcbank.com/**"
 CHECKOUT_TIMEOUT_MS: int = 15_000
 CHECKOUT_ERROR_SELECTORS: str = ".error, .alert, .notice, [role=alert], .flash"
 

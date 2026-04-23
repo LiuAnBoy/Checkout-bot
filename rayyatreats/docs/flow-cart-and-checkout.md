@@ -297,9 +297,9 @@ The 3D verification page is inside **nested cross-origin iframes**:
 - Playwright `frame_locator` can reach the outer `challengeMethodIframe`, but
   the inner bank OTP page is issuer-controlled and varies by card; SMS OTP
   entry is not automated.
-- **Bot does not automate 3D verification.** It detects the redirect to
-  `ctbcbank.com` as success signal (order created), then closes the browser.
-  The user completes 3D-Secure manually via
+- **Bot does not automate 3D verification.** It detects any redirect away from
+  `rayyatreats.com` as the success signal (order created), then closes the
+  browser. The user completes 3D-Secure manually via
   `/account/orders` → 「前往付款」.
 
 ### Key Discovery: Order Lifecycle
@@ -335,27 +335,27 @@ After 3D cancellation/closure:
 
 ---
 
-## Bot Strategy (Updated 2026-04-22)
+## Bot Strategy (Updated 2026-04-23)
 
 ### Pre-sale Phase (~12:20 startup)
 
 ```
-1. Login → get session cookie + CSRF token
-2. Ask sale time (user input)
-3. Warmup: GET homepage + /cart.json to keep TCP alive
-4. Countdown to sale_time
+1. Login → get session cookie
+2. Warmup: GET homepage + /cart.json to keep TCP alive
+3. sync(session) — refresh products.json cache (fallback to local if products delisted)
+4. Prefetch CSRF token
+5. Show interactive menu — user selects products → Enter
+6. Countdown to sale_time
 ```
 
 ### At sale_time (T+0)
 
 ```
-5. fetch_only(session) — parallel fetch all products + variant IDs (~200–400ms)
-6. Show interactive menu + elapsed time counter
-7. User selects products → Enter
-8. fire(session, csrf_token, selected) — immediate POST /cart/add (no lead time)
+7. fire(session, csrf_token, selected) — immediate POST /cart/add from cache (no fetch)
+   └── on 422/404: re-fetch variant_id via /products/{handle}.json → retry once
 ```
 
-No pre-sale warmup or lead-time delay — `fire()` is called immediately after Enter.
+No product fetch at sale time — `fire()` uses pre-synced cached variant IDs directly.
 
 ### Checkout Phase (~T+3–11s)
 

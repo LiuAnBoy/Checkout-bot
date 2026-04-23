@@ -8,7 +8,6 @@ from playwright.sync_api import sync_playwright
 
 from .config import (
     CART_CONFLICT_TEMP_ZONE,
-    CHECKOUT_3DS_URL_PATTERN,
     CHECKOUT_ERROR_SELECTORS,
     CHECKOUT_HEADLESS,
     CHECKOUT_TIMEOUT_MS,
@@ -134,11 +133,14 @@ def do_checkout(session: requests.Session) -> bool:
         print("   📤 送出結帳...")
         page.locator(SEL_CHECKOUT_SUBMIT).click()
 
-        # ── 8. Wait for 3DS redirect = order created ─────────────────────────
+        # ── 8. Wait for redirect away from rayyatreats = order created ──────────
         try:
-            page.wait_for_url(CHECKOUT_3DS_URL_PATTERN, timeout=CHECKOUT_TIMEOUT_MS)
+            page.wait_for_url(
+                lambda url: "rayyatreats.com" not in url,
+                timeout=CHECKOUT_TIMEOUT_MS,
+            )
             final_url = page.url
-            print(f"   ✅ 訂單已成立，跳轉至 3DS: {final_url}")
+            print(f"   ✅ 訂單已成立，跳轉至: {final_url}")
             print("   → 請前往 /account/orders 完成付款驗證")
             return True
         except PlaywrightTimeoutError:
