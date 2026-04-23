@@ -38,7 +38,7 @@ def _fetch_product_links(session: requests.Session) -> list[dict[str, str]]:
         raw_name = a.get_text(strip=True)
         if not raw_name or len(raw_name) < 5:
             continue
-        if "紙袋" in raw_name or handle in seen:
+        if "紙袋" in raw_name or "NG" in raw_name or handle in seen:
             continue
         seen.add(handle)
         products.append({"handle": handle, "display_name": raw_name, "url": BASE_URL + href})
@@ -47,9 +47,9 @@ def _fetch_product_links(session: requests.Session) -> list[dict[str, str]]:
 
 
 def _strip_schedule(display_name: str) -> str:
-    """Remove scheduling suffixes like '（4/23 中午12:30開單）' and 【】 brackets."""
+    """Remove scheduling suffixes like '（4/23 中午12:30開單...）' and 【】 brackets."""
     name = re.sub(r"[【】]", "", display_name)
-    name = re.sub(r"（[^）]*\d+/\d+[^）]*開單[^）]*）", "", name).strip()
+    name = re.sub(r"\s*（\d+/\d+.*$", "", name, flags=re.DOTALL).strip()
     return name
 
 
