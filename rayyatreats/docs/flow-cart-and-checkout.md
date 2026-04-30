@@ -239,13 +239,17 @@ Main page (rayyatreats.com)
 The iframe is cross-origin. Playwright's `frame_locator` accesses it via CDP,
 bypassing same-origin restrictions.
 
-#### Current approach: Playwright `frame_locator`
+#### Current approach: Playwright `frame_locator` + `type(delay=120)`
 
 ```python
 iframe = page.frame_locator("iframe#cyberbizpay-main-iframe")
-iframe.locator("#card-number").fill(cc_number)
-iframe.locator("#expire-date").fill(cc_expiry)   # MMYY e.g. "1230"
-iframe.locator("#cvc").fill(cc_cvv)
+iframe.locator("#card-number").click()
+iframe.locator("#card-number").type(cc_number, delay=120)
+iframe.locator("#expire-date").click()
+iframe.locator("#expire-date").type(cc_expiry, delay=120)  # MMYY e.g. "1230"
+iframe.locator("#cvc").click()
+iframe.locator("#cvc").type(cc_cvv, delay=120)
+iframe.locator("#cvc").press("Tab")  # blur to commit
 ```
 
 Selector IDs (inside iframe):
@@ -261,12 +265,41 @@ The save-card checkbox:
 
 See `src/checkout.py` and selector constants in `src/config.py`.
 
+#### Why `type(delay=120)` instead of `fill()` (verified 2026-04-30)
+
+`fill()` sets the value via JS without firing per-character `input` /
+`keydown` events. The cyberbizpay iframe relies on those events for two
+things:
+
+1. **Re-formatting the card number** — every 4 digits it inserts a space and
+   moves the caret. With `fill()`, no events fire and the value stays
+   un-formatted; the iframe's internal "card data ready" flag never flips.
+2. **Tokenization on submit** — when `#checkout-button` is clicked, the
+   parent page asks the iframe for a payment token via `postMessage`. If
+   the iframe is not "ready", it silently returns nothing. The submit
+   click then no-ops (no network request, no error message), leaving the
+   user stuck on the cart page.
+
+`type()` simulates real keystrokes, so each character fires `keydown` /
+`input`. But there's a second trap: at `delay=20ms`, the iframe's space
+insertion races with the next keypress and **drops characters**. Symptom:
+card-number value ends up at length 11 instead of 19 (16 digits + 3
+spaces). Bumping to `delay=120ms` gives the iframe time to re-format
+between keystrokes.
+
+When debugging this class of issue:
+- Read `input[name="credit_card[payment_token]"]` after submit — empty
+  string means tokenization never fired, which means the iframe wasn't
+  "ready", which usually means the card number wasn't typed correctly.
+- Check `iframe.locator("#card-number").input_value()` length: should be
+  19 for a 16-digit card.
+
 #### Legacy: agent-browser 28-press workaround (removed)
 
 Before the Playwright migration, the bot used `agent-browser` to fill the
 iframe via 28 individual `press` commands (Shift+Tab into the iframe, then
-digit-by-digit). This took 5–6 seconds. With `frame_locator().fill()` the
-same work completes in under 100ms.
+digit-by-digit). This took 5–6 seconds. With `frame_locator().type()` the
+same work completes in roughly 2 seconds (16 × 120ms + a bit).
 
 Constraints that forced the old approach:
 - `agent-browser fill` / `type` do NOT work on cross-origin iframe fields
@@ -430,8 +463,11 @@ Returns:
 
 ### Cart URL Structure
 
-- `/cart` → 302 redirect → `/carts/{cart_id}` (if items exist)
-- `/cart` → 302 redirect → `/account/index` (if cart is empty)
+- `/cart` → 302 redirect → `/carts/{cart_id}` always (regardless of whether
+  items exist; an empty cart still gets a hash and the page renders
+  `<form id="cart_form" class="cart_empty">` with "購物車是空的")
+- After `POST /cart/clear`, a fresh `/cart` request gets a *new* hash —
+  the previous hash is abandoned, not reused
 - `/carts/{cart_id}/cart_conflict` → temperature zone selection (if applicable)
 - Cart ID is a hex hash (e.g., `a0c578301ba3013f7a3966a978772520`)
 - **Cart is bound to the hash, NOT to session/login** — verified: another browser (different identity, not logged in) opening the same `/carts/{hash}/cart_conflict` URL can see the cart items (e.g., 紙袋)
