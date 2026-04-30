@@ -11,7 +11,6 @@ from .config import (
     FIRE_INTERVAL_MS,
     MAX_ATTEMPTS_PER_VARIANT,
     OVERALL_TIMEOUT_S,
-    VERIFY_INTERVAL_MS,
 )
 from .menu import Product
 from .sync import fetch_variant_id
@@ -67,21 +66,41 @@ def _fire_worker(
     product: Product,
     variant_id: int,
     stop_event: threading.Event,
+    success_event: threading.Event,
 ) -> None:
-    """Per-variant fire loop: POST /cart/add at FIRE_INTERVAL_MS until done."""
+    """Per-variant fire loop: POST /cart/add at FIRE_INTERVAL_MS until done.
+
+    Sets ``success_event`` once the POST receives a definitive success signal
+    (HTTP 200, or 409 ``限購`` meaning the item is already in the cart).
+    """
     attempts = 0
     backoff_idx = 0
     vid = variant_id
     refetched = False
+    status_counts: dict[int, int] = {}
 
     while not stop_event.is_set() and attempts < MAX_ATTEMPTS_PER_VARIANT:
         try:
             status = _add_to_cart(session, csrf_token, vid)
-        except Exception:
+        except Exception as e:
+            print(f"\n   ⚠️  {product.name}：請求例外 ({e!r})")
             _sleep_ms(FIRE_INTERVAL_MS)
             continue
 
         attempts += 1
+        status_counts[status] = status_counts.get(status, 0) + 1
+
+        if status == 200:
+            # Authoritative success — POST returned the line item.
+            print(f"\n   ✅ {product.name}：HTTP 200 第 {attempts} 次成功")
+            success_event.set()
+            return
+
+        if status == 409:
+            # 限購 — items are already in the cart, treat as success.
+            print(f"\n   ✅ {product.name}：HTTP 409（已達限購＝已在購物車中）")
+            success_event.set()
+            return
 
         if status in (404, 422) and not refetched:
             refetched = True
@@ -94,55 +113,17 @@ def _fire_worker(
             _sleep_ms(FIRE_INTERVAL_MS)
         elif status == 429:
             delay = BACKOFF_429_MS[min(backoff_idx, len(BACKOFF_429_MS) - 1)]
+            print(f"\n   ⏳ {product.name}：HTTP 429 → backoff {delay}ms")
             backoff_idx += 1
             _sleep_ms(delay)
         else:
+            print(f"\n   ⚠️  {product.name}：HTTP {status}（第 {attempts} 次）")
             backoff_idx = 0
             _sleep_ms(FIRE_INTERVAL_MS)
 
     if attempts >= MAX_ATTEMPTS_PER_VARIANT and not stop_event.is_set():
-        print(f"   ⚠️  {product.name}：已達最大嘗試次數 ({MAX_ATTEMPTS_PER_VARIANT})")
-
-
-def _verify_loop(
-    session: requests.Session,
-    expected_count: int,
-    stop_event: threading.Event,
-    per_variant_stops: dict[int, threading.Event],
-    variant_qty: dict[int, int],
-    deadline: float,
-) -> int:
-    """Poll /cart.json every VERIFY_INTERVAL_MS. Returns final item_count."""
-    prev_count = 0
-
-    while not stop_event.is_set() and time.monotonic() < deadline:
-        try:
-            cart = _cart_json(session)
-        except Exception as e:
-            print(f"⚠️  /cart.json 查詢失敗：{e}")
-            _sleep_ms(VERIFY_INTERVAL_MS)
-            continue
-
-        count = cart.get("item_count", 0)
-
-        if count > prev_count:
-            cart_qty: dict[int, int] = {
-                item["variant_id"]: item["quantity"]
-                for item in cart.get("items", [])
-            }
-            for vid, evt in per_variant_stops.items():
-                if not evt.is_set() and cart_qty.get(vid, 0) >= variant_qty[vid]:
-                    evt.set()
-            prev_count = count
-
-        if count >= expected_count:
-            stop_event.set()
-            return count
-
-        _sleep_ms(VERIFY_INTERVAL_MS)
-
-    stop_event.set()
-    return prev_count
+        breakdown = ", ".join(f"{s}×{n}" for s, n in sorted(status_counts.items()))
+        print(f"   ⚠️  {product.name}：已達最大嘗試次數 ({MAX_ATTEMPTS_PER_VARIANT})；status={breakdown}")
 
 
 # ---------------------------------------------------------------------------
@@ -178,7 +159,6 @@ def fire(
     per_variant_stops: dict[int, threading.Event] = {
         vid: threading.Event() for vid in variant_map
     }
-    variant_qty: dict[int, int] = {vid: variant_map[vid].quantity for vid in variant_map}
 
     # Merge per-variant stop into worker stop event
     combined_stops: dict[int, threading.Event] = {}
@@ -203,28 +183,41 @@ def fire(
     for vid, product in variant_map.items():
         t = threading.Thread(
             target=_fire_worker,
-            args=(session, csrf_token, product, vid, combined_stops[vid]),
+            args=(
+                session,
+                csrf_token,
+                product,
+                vid,
+                combined_stops[vid],
+                per_variant_stops[vid],
+            ),
             daemon=True,
         )
         t.start()
         fire_threads.append(t)
 
-    # Launch verify loop
+    # Wait for either all per_variant_stops to be set (= all workers succeeded)
+    # or the overall timeout. cart.json is unreliable for member carts on this
+    # storefront, so we trust the per-variant success signal from workers.
     deadline = time.monotonic() + OVERALL_TIMEOUT_S
-    expected = sum(p.quantity for p in selected)
-    _verify_loop(
-        session, expected, global_stop, per_variant_stops, variant_qty, deadline
-    )
+    while time.monotonic() < deadline:
+        if all(evt.is_set() for evt in per_variant_stops.values()):
+            break
+        time.sleep(0.05)
+    global_stop.set()
 
     # Wait for fire threads to finish
     for t in fire_threads:
         t.join(timeout=1.0)
 
-    # Determine succeeded / failed by checking cart
+    # Determine succeeded / failed from per_variant_stops (set by workers on
+    # POST 200 / 409). Fall back to /cart.json for an extra sanity check, but
+    # don't override worker results — cart.json shows the anonymous session
+    # cart and won't reflect member-cart adds.
     try:
         cart = _cart_json(session)
     except Exception as e:
-        print(f"⚠️  最終購物車驗證失敗（{e}），結果可能不準確")
+        print(f"⚠️  最終購物車驗證查詢失敗（{e}）")
         cart = {}
 
     cart_qty_map: dict[int, int] = {
@@ -234,6 +227,11 @@ def fire(
 
     succeeded_set: set[Product] = set()
     for p in selected:
+        # Worker set per_variant_stop for any of its variants → success
+        if any(per_variant_stops[v["id"]].is_set() for v in p.variants):
+            succeeded_set.add(p)
+            continue
+        # Otherwise fall back to cart.json (unlikely to help, but harmless)
         total = sum(cart_qty_map.get(v["id"], 0) for v in p.variants)
         if total >= p.quantity:
             succeeded_set.add(p)

@@ -1,8 +1,8 @@
 """Tunable parameters for the checkout bot."""
 
 # Fire loop
-FIRE_INTERVAL_MS: int = 100        # ms between /cart/add attempts per worker
-MAX_ATTEMPTS_PER_VARIANT: int = 5  # give up after this many attempts
+FIRE_INTERVAL_MS: int = 100          # ms between /cart/add attempts per worker
+MAX_ATTEMPTS_PER_VARIANT: int = 100  # give up after this many attempts (~10s at 100ms)
 
 # Verify loop
 VERIFY_INTERVAL_MS: int = 200      # ms between /cart.json polls

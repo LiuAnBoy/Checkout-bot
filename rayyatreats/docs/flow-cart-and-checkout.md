@@ -70,24 +70,33 @@ for variant_id in selected_variant_ids:
     })
 ```
 
-### Important Discovery (Verified 2026-04-16)
+### Important Discovery (Updated 2026-04-30)
 
-When a product is sold out:
-- The product page shows `button "已售完" [disabled]` — UI prevents clicking
-- `POST /cart/add` with a sold-out variant ID still returns **HTTP 200 + full product JSON**
-- **BUT the item does NOT actually enter the cart** — `/cart.json` shows `items: [], item_count: 0`
-- The API response is misleading; the backend silently rejects sold-out items
+#### `/cart.json` does NOT reflect the member cart
 
-When a product has stock (e.g., RB紙袋):
-- `POST /cart/add` returns HTTP 200 + product JSON
-- The item IS actually in the cart — `/cart.json` confirms it
+- `/cart.json` returns the **anonymous session cart** (tied to whatever `_cyberbiz_session` cookie the request currently holds)
+- The **member cart** lives at `/carts/{cart_token}` (reach via `GET /cart` → 302)
+- Even when logged in, the server rotates `_cyberbiz_session` on most responses, so `/cart.json` reads from a freshly-rotated empty session and never shows items added via `POST /cart/add`
+- **Do not use `/cart.json` to verify a member-cart add — it will always look empty**
 
-**Stock validation happens at two levels:**
-1. **Product page UI**: buttons controlled by `inventoryQuantity` (cosmetic, bypassable by API)
-2. **Cart add backend**: silently ignores sold-out items (returns 200 but doesn't add)
-3. **Checkout submit**: final validation when clicking "立即結帳" (shows error if stock ran out between cart-add and checkout)
+#### Authoritative success signal: the POST response itself
 
-**Cart verification is essential** — always check `/cart.json` after `/cart/add` to confirm items were actually added.
+| HTTP | Meaning |
+|------|---------|
+| 200 | Item added (response body echoes the line item) |
+| 409 `err_msg: 購物車內商品數已超過此商品限購數量` | Already at the per-product limit — items are already in the cart, treat as success |
+| 404 / 422 | Variant ID rejected — re-fetch via `/products/{handle}.json` and retry |
+| 429 | Rate limited — exponential backoff |
+| 5xx / other | Transient error — retry |
+
+`_fire_worker` (in `src/waiter.py`) sets the per-variant `success_event` immediately on 200 / 409 and stops retrying that variant. The verify loop that previously polled `/cart.json` has been removed.
+
+#### Sold-out behavior (legacy note, 2026-04-16)
+
+- Product page shows `button "已售完" [disabled]` — UI prevents clicking
+- `POST /cart/add` may still return HTTP 200; whether the item actually persists depends on backend stock state
+- Final guard is the **checkout submit**: if stock ran out between add and checkout, "立即結帳" returns an error
+- Because `/cart.json` is unreliable here, sold-out detection is best done at checkout time, not at cart-add time
 
 ---
 
@@ -417,7 +426,7 @@ Returns:
 }
 ```
 
-**Always check this after `/cart/add` to verify items were actually added.**
+⚠️ **`/cart.json` reflects the anonymous session cart, not the member cart.** Items added via `POST /cart/add` while logged in usually do **not** appear here. Use the POST response status (200 / 409) as the success signal instead. See the *Important Discovery* section above.
 
 ### Cart URL Structure
 
