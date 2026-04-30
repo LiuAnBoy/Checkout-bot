@@ -120,11 +120,23 @@ def do_checkout(session: requests.Session) -> bool:
         # ── 6. Fill credit card iframe fields ────────────────────────────────
         # Playwright frame_locator accesses cross-origin iframes via CDP,
         # bypassing the same-origin restriction that blocks agent-browser.
+        # Use .type() instead of .fill() — fill() sets the value via JS but
+        # may not fire the input/change events cyberbizpay iframe relies on
+        # to mark card data as ready and tokenize on submit.
         iframe = page.frame_locator(SEL_CC_IFRAME)
         iframe.locator(SEL_CC_NUMBER).wait_for(timeout=8000)
-        iframe.locator(SEL_CC_NUMBER).fill(cc_number)
-        iframe.locator(SEL_CC_EXPIRY).fill(cc_expiry)
-        iframe.locator(SEL_CC_CVV).fill(cc_cvv)
+        # delay must be long enough for cyberbizpay iframe to re-format the
+        # value after every 4 digits (it inserts spaces, which moves the
+        # caret). Anything below ~100ms causes characters to be dropped.
+        iframe.locator(SEL_CC_NUMBER).click()
+        iframe.locator(SEL_CC_NUMBER).type(cc_number, delay=120)
+        iframe.locator(SEL_CC_EXPIRY).click()
+        iframe.locator(SEL_CC_EXPIRY).type(cc_expiry, delay=120)
+        iframe.locator(SEL_CC_CVV).click()
+        iframe.locator(SEL_CC_CVV).type(cc_cvv, delay=120)
+        # Blur the last field to commit the value and let the iframe finalize
+        # its "ready" state.
+        iframe.locator(SEL_CC_CVV).press("Tab")
 
         # ── 6b. 保存我的信用卡資訊（方便下次自動帶入）──────────────────────────
         page.locator(SEL_SAVE_MY_CARD).check()
