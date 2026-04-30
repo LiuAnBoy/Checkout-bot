@@ -3,7 +3,7 @@
     {
       "handle": "pistachioooochocolatebar-20260415114521",
       "name": "3入組合：超級開心果＋金萱百香＋芝麻米香脆脆",
-      "display_name": "【3入組合：超級開心果＋金萱百香＋芝麻米香脆脆】（4/23 中午12:30開單！五日內出貨！遇週日一順延！）瑞",
+      "display_name": "【3入組合：超級開心果＋金萱百香＋芝麻米香脆脆】（4/30 中午12:30開單！五日內出貨！遇週日一順延！）雅",
       "is_combo": true,
       "price": 1470,
       "variants": [
@@ -17,7 +17,7 @@
     {
       "handle": "pistachioooochocolatebar-20260410113407",
       "name": "3入組合：開心榛果脆脆＋焙茶脆脆＋蓮花脆餅脆脆",
-      "display_name": "【3入組合：開心榛果脆脆＋焙茶脆脆＋蓮花脆餅脆脆】（4/23 中午12:30開單！五日內出貨！遇週日一順延！）瑞",
+      "display_name": "【3入組合：開心榛果脆脆＋焙茶脆脆＋蓮花脆餅脆脆】（4/30 中午12:30開單！五日內出貨！遇週日一順延！）雅",
       "is_combo": true,
       "price": 1470,
       "variants": [
@@ -31,7 +31,7 @@
     {
       "handle": "starwberrycakechoco-20260415114413",
       "name": "2入組合：草莓蛋糕脆脆＋花生麻糬脆脆",
-      "display_name": "【2入組合：草莓蛋糕脆脆＋花生麻糬脆脆】（4/23 中午12:30開單！五日內出貨！遇週日一順延！）瑞",
+      "display_name": "【2入組合：草莓蛋糕脆脆＋花生麻糬脆脆】（4/30 中午12:30開單！五日內出貨！遇週日一順延！）雅",
       "is_combo": true,
       "price": 980,
       "variants": [
@@ -43,9 +43,51 @@
       ]
     },
     {
+      "handle": "2入花韻．母親節杯子蛋糕僅限宅配現貨三日內出貨遇週日一順延-20260331133907",
+      "name": "2入花韻．母親節杯子蛋糕（僅限宅配！五日內出貨！遇週日一順延！）",
+      "display_name": "【2入】花韻．母親節杯子蛋糕（僅限宅配！五日內出貨！遇週日一順延！）",
+      "is_combo": false,
+      "price": 280,
+      "variants": [
+        {
+          "id": 81133478,
+          "title": null,
+          "price": 280
+        }
+      ]
+    },
+    {
+      "handle": "6入花韻．母親節杯子蛋糕僅限宅配現貨三日內出貨遇週日一順延-20260331134445",
+      "name": "6入花韻．母親節杯子蛋糕（僅限宅配！五日內出貨！遇週日一順延！）",
+      "display_name": "【6入】花韻．母親節杯子蛋糕（僅限宅配！五日內出貨！遇週日一順延！）",
+      "is_combo": false,
+      "price": 890,
+      "variants": [
+        {
+          "id": 81133613,
+          "title": null,
+          "price": 890
+        }
+      ]
+    },
+    {
+      "handle": "母親節美式巧克力軟餅乾僅限宅配現貨三日內出貨遇週日一順延-20260331132921",
+      "name": "母親節美式巧克力軟餅乾（僅限宅配！五日內出貨！遇週日一順延！）",
+      "display_name": "【母親節】美式巧克力軟餅乾（僅限宅配！五日內出貨！遇週日一順延！）",
+      "is_combo": false,
+      "price": 60,
+      "variants": [
+        {
+          "id": 81132747,
+          "title": null,
+          "price": 60
+        }
+      ]
+    },
+    {
       "handle": "pistachioooochocolatebar",
       "name": "超級開心果脆脆",
-      "display_name": "【超級開心果脆脆】（4/23 中午12:30開單！五日內出貨！遇週日一順延！）瑞",
+      "display_name": "【超級開心果脆脆】（4/30 中午12:30開單！五日內出貨！遇週日一順延！）雅",
       "is_combo": false,
       "price": 490,
       "variants": [
@@ -59,7 +101,7 @@
     {
       "handle": "pistachioooochocolatebar-20251017132457",
       "name": "金萱百香脆脆",
-      "display_name": "【金萱百香脆脆】（4/23 中午12:30開單！五日內出貨！遇週日一順延！）瑞",
+      "display_name": "【金萱百香脆脆】（4/30 中午12:30開單！五日內出貨！遇週日一順延！）雅",
       "is_combo": false,
       "price": 490,
       "variants": [
@@ -73,7 +115,7 @@
     {
       "handle": "pistachiochocolatebar",
       "name": "開心榛果脆脆",
-      "display_name": "【開心榛果脆脆】（4/23 中午12:30開單！五日內出貨！遇週日一順延！）瑞",
+      "display_name": "【開心榛果脆脆】（4/30 中午12:30開單！五日內出貨！遇週日一順延！）雅",
       "is_combo": false,
       "price": 490,
       "variants": [
@@ -87,7 +129,7 @@
     {
       "handle": "peanutmochichocobar",
       "name": "花生麻糬脆脆",
-      "display_name": "【花生麻糬脆脆】（4/23 中午12:30開單！五日內出貨！遇週日一順延！） 瑞",
+      "display_name": "【花生麻糬脆脆】（4/30 中午12:30開單！五日內出貨！遇週日一順延！） 雅",
       "is_combo": false,
       "price": 490,
       "variants": [
@@ -101,7 +143,7 @@
     {
       "handle": "starwberrycakechoco",
       "name": "草莓蛋糕脆脆（冷凍保存！）",
-      "display_name": "【草莓蛋糕脆脆】（冷凍保存！）（4/23 中午12:30開單！五日內出貨！遇週日一順延！）瑞",
+      "display_name": "【草莓蛋糕脆脆】（冷凍保存！）（4/30 中午12:30開單！五日內出貨！遇週日一順延！）雅",
       "is_combo": false,
       "price": 490,
       "variants": [
@@ -115,7 +157,7 @@
     {
       "handle": "hojichachocolatebar-20250624181805",
       "name": "焙茶脆脆",
-      "display_name": "【焙茶脆脆】（4/23 中午12:30開單！五日內出貨！遇週日一順延！）瑞",
+      "display_name": "【焙茶脆脆】（4/30 中午12:30開單！五日內出貨！遇週日一順延！）雅",
       "is_combo": false,
       "price": 490,
       "variants": [
@@ -129,7 +171,7 @@
     {
       "handle": "sesamechocolatebar-20260415114625",
       "name": "芝麻米香脆脆",
-      "display_name": "【芝麻米香脆脆】（4/23 中午12:30開單！五日內出貨！遇週日一順延！) 瑞",
+      "display_name": "【芝麻米香脆脆】（4/30 中午12:30開單！五日內出貨！遇週日一順延！) 雅",
       "is_combo": false,
       "price": 490,
       "variants": [
@@ -143,7 +185,7 @@
     {
       "handle": "biscoffchocolatebar",
       "name": "蓮花脆餅脆脆",
-      "display_name": "【蓮花脆餅脆脆】（4/23 中午12:30開單！五日內出貨！遇週日一順延！）瑞",
+      "display_name": "【蓮花脆餅脆脆】（4/30 中午12:30開單！五日內出貨！遇週日一順延！）雅",
       "is_combo": false,
       "price": 490,
       "variants": [

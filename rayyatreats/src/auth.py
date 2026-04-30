@@ -12,10 +12,17 @@ BASE_URL = "https://www.rayyatreats.com"
 
 
 def _save_session(session: requests.Session) -> None:
-    data = {
-        "cookies": dict(session.cookies),
-    }
-    SESSION_FILE.write_text(json.dumps(data))
+    """Serialize cookies preserving domain/path so reload doesn't create duplicates."""
+    cookies = [
+        {
+            "name": c.name,
+            "value": c.value,
+            "domain": c.domain,
+            "path": c.path,
+        }
+        for c in session.cookies
+    ]
+    SESSION_FILE.write_text(json.dumps({"cookies": cookies}))
 
 
 def _load_session() -> requests.Session | None:
@@ -23,7 +30,25 @@ def _load_session() -> requests.Session | None:
         return None
     data = json.loads(SESSION_FILE.read_text())
     session = requests.Session()
-    session.cookies.update(data.get("cookies", {}))
+
+    raw = data.get("cookies", [])
+    # Backward compat: old format was a dict {name: value} with no domain
+    if isinstance(raw, dict):
+        for name, value in raw.items():
+            session.cookies.set(name, value, domain="www.rayyatreats.com", path="/")
+    else:
+        for c in raw:
+            session.cookies.set(
+                c["name"],
+                c["value"],
+                domain=c.get("domain") or "www.rayyatreats.com",
+                path=c.get("path") or "/",
+            )
+
+    # Drop any empty-domain cookies that may have leaked from old format
+    for c in list(session.cookies):
+        if not c.domain:
+            session.cookies.clear(domain=c.domain, path=c.path, name=c.name)
     return session
 
 
