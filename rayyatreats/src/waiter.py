@@ -70,14 +70,17 @@ def _fire_worker(
 ) -> None:
     """Per-variant fire loop: POST /cart/add at FIRE_INTERVAL_MS until done.
 
-    Sets ``success_event`` once the POST receives a definitive success signal
-    (HTTP 200, or 409 ``限購`` meaning the item is already in the cart).
+    POSTs ``quantity: 1`` repeatedly and counts HTTP 200 responses. Sets
+    ``success_event`` once we have ``product.quantity`` successful adds, or
+    on HTTP 409 (限購, can't add more anyway).
     """
     attempts = 0
     backoff_idx = 0
     vid = variant_id
     refetched = False
     status_counts: dict[int, int] = {}
+    success_count = 0
+    target_qty = max(1, product.quantity)
 
     while not stop_event.is_set() and attempts < MAX_ATTEMPTS_PER_VARIANT:
         try:
@@ -91,15 +94,33 @@ def _fire_worker(
         status_counts[status] = status_counts.get(status, 0) + 1
 
         if status == 200:
-            # Authoritative success — POST returned the line item.
-            print(f"\n   ✅ {product.name}：HTTP 200 第 {attempts} 次成功")
-            success_event.set()
-            return
+            success_count += 1
+            print(
+                f"\n   ✅ {product.name}：HTTP 200 第 {attempts} 次成功 "
+                f"（{success_count}/{target_qty}）"
+            )
+            if success_count >= target_qty:
+                success_event.set()
+                return
+            # Need more — keep firing without backoff.
+            backoff_idx = 0
+            _sleep_ms(FIRE_INTERVAL_MS)
+            continue
 
         if status == 409:
-            # 限購 — items are already in the cart, treat as success.
-            print(f"\n   ✅ {product.name}：HTTP 409（已達限購＝已在購物車中）")
-            success_event.set()
+            # 限購 — server refuses further adds for this variant.
+            if success_count >= target_qty:
+                print(
+                    f"\n   ✅ {product.name}：HTTP 409（已達限購，"
+                    f"已加入 {success_count}/{target_qty}）"
+                )
+                success_event.set()
+            else:
+                print(
+                    f"\n   ⚠️  {product.name}：HTTP 409 限購，"
+                    f"已加入 {success_count}/{target_qty}，剩 "
+                    f"{target_qty - success_count} 件無法購入"
+                )
             return
 
         if status in (404, 422) and not refetched:
