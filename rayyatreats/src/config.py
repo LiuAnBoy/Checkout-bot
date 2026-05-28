@@ -40,3 +40,10 @@ SEL_CC_IFRAME = "iframe#cyberbizpay-main-iframe"
 SEL_CC_NUMBER = "#card-number"
 SEL_CC_EXPIRY = "#expire-date"
 SEL_CC_CVV = "#cvc"
+
+# Saved-card vs new-card sub-options under the 信用卡 payment method. When the
+# account has a stored card, "選擇常用信用卡" is present and active by default and
+# NO card iframe is rendered — filling must be skipped. Match on the stable
+# data-translate-keys attribute rather than display text.
+SEL_CC_SAVED_CARD = '.checkable-radio:has([data-translate-keys="creditcard.select_my_card"])'
+SEL_CC_USE_OTHER_CARD = '.checkable-radio:has([data-translate-keys="creditcard.use-other-card"])'
