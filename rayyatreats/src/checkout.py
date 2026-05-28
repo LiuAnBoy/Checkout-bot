@@ -18,6 +18,7 @@ from .config import (
     SEL_CC_EXPIRY,
     SEL_CC_IFRAME,
     SEL_CC_NUMBER,
+    SEL_CC_SAVED_CARD,
     SEL_CHECKOUT_SUBMIT,
     SEL_SAVE_MY_CARD,
     SEL_SHIPPING_OPTION_FROZEN,
@@ -113,33 +114,44 @@ def do_checkout(session: requests.Session) -> bool:
         print("   🐱 選擇黑貓冷凍宅配...")
         page.locator(SEL_SHIPPING_OPTION_FROZEN).click()
 
-        # ── 5. Fill card holder name (main page field) ───────────────────────
-        print("   💳 填寫信用卡...")
-        page.locator(SEL_CARD_HOLDER_NAME).fill(cc_holder)
+        # ── 5. Payment: reuse a saved card if one exists, else fill a new one ─
+        # When the account has a stored card, the checkout renders a
+        # "選擇常用信用卡" option (active by default) and no card iframe at all.
+        # Waiting for the iframe in that case would time out. So: if the
+        # saved-card option is present, make sure it's selected and skip the
+        # whole card-entry flow.
+        saved_card = page.locator(SEL_CC_SAVED_CARD)
+        if saved_card.count() > 0:
+            print("   💳 偵測到常用信用卡，沿用已存卡片（跳過填卡）...")
+            if "active" not in (saved_card.first.get_attribute("class") or ""):
+                saved_card.first.click()
+                page.wait_for_timeout(300)
+        else:
+            print("   💳 填寫信用卡...")
+            page.locator(SEL_CARD_HOLDER_NAME).fill(cc_holder)
 
-        # ── 6. Fill credit card iframe fields ────────────────────────────────
-        # Playwright frame_locator accesses cross-origin iframes via CDP,
-        # bypassing the same-origin restriction that blocks agent-browser.
-        # Use .type() instead of .fill() — fill() sets the value via JS but
-        # may not fire the input/change events cyberbizpay iframe relies on
-        # to mark card data as ready and tokenize on submit.
-        iframe = page.frame_locator(SEL_CC_IFRAME)
-        iframe.locator(SEL_CC_NUMBER).wait_for(timeout=8000)
-        # delay must be long enough for cyberbizpay iframe to re-format the
-        # value after every 4 digits (it inserts spaces, which moves the
-        # caret). Anything below ~100ms causes characters to be dropped.
-        iframe.locator(SEL_CC_NUMBER).click()
-        iframe.locator(SEL_CC_NUMBER).type(cc_number, delay=120)
-        iframe.locator(SEL_CC_EXPIRY).click()
-        iframe.locator(SEL_CC_EXPIRY).type(cc_expiry, delay=120)
-        iframe.locator(SEL_CC_CVV).click()
-        iframe.locator(SEL_CC_CVV).type(cc_cvv, delay=120)
-        # Blur the last field to commit the value and let the iframe finalize
-        # its "ready" state.
-        iframe.locator(SEL_CC_CVV).press("Tab")
+            # Playwright frame_locator accesses cross-origin iframes via CDP,
+            # bypassing the same-origin restriction that blocks agent-browser.
+            # Use .type() instead of .fill() — fill() sets the value via JS but
+            # may not fire the input/change events cyberbizpay iframe relies on
+            # to mark card data as ready and tokenize on submit.
+            iframe = page.frame_locator(SEL_CC_IFRAME)
+            iframe.locator(SEL_CC_NUMBER).wait_for(timeout=8000)
+            # delay must be long enough for cyberbizpay iframe to re-format the
+            # value after every 4 digits (it inserts spaces, which moves the
+            # caret). Anything below ~100ms causes characters to be dropped.
+            iframe.locator(SEL_CC_NUMBER).click()
+            iframe.locator(SEL_CC_NUMBER).type(cc_number, delay=120)
+            iframe.locator(SEL_CC_EXPIRY).click()
+            iframe.locator(SEL_CC_EXPIRY).type(cc_expiry, delay=120)
+            iframe.locator(SEL_CC_CVV).click()
+            iframe.locator(SEL_CC_CVV).type(cc_cvv, delay=120)
+            # Blur the last field to commit the value and let the iframe finalize
+            # its "ready" state.
+            iframe.locator(SEL_CC_CVV).press("Tab")
 
-        # ── 6b. 保存我的信用卡資訊（方便下次自動帶入）──────────────────────────
-        page.locator(SEL_SAVE_MY_CARD).check()
+            # 保存我的信用卡資訊（方便下次自動帶入）
+            page.locator(SEL_SAVE_MY_CARD).check()
 
         # ── 7. Submit order ───────────────────────────────────────────────────
         print("   📤 送出結帳...")
