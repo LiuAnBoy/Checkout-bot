@@ -1,0 +1,5 @@
+# Runtime product snapshot — regenerated each run, never the source of truth.
+# The committed source of truth is data/products.base.json.
+data/products.json
+data/.products.*.tmp
+data/products_backup.json
