@@ -3,3 +3,6 @@
 data/products.json
 data/.products.*.tmp
 data/products_backup.json
+
+# Diagnostic logs — local only, never committed.
+logs/
