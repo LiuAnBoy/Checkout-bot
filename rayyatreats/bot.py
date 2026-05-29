@@ -30,7 +30,7 @@ if _missing:
 
 from src.auth import get_session, get_csrf_token
 from src.menu import select_products, print_summary
-from src.sync import sync as sync_products
+from src.sync import refresh as refresh_products
 from src.waiter import fire
 from src.checkout import do_checkout
 
@@ -63,7 +63,7 @@ def main() -> None:
         print("⚠️  預熱失敗，繼續...")
 
     print("\n🔄 同步商品資料...")
-    sync_products(session, interactive=False)
+    refresh_products(session)
 
     csrf_token = get_csrf_token(session)
 
