@@ -12,6 +12,7 @@ from .config import (
     MAX_ATTEMPTS_PER_VARIANT,
     OVERALL_TIMEOUT_S,
 )
+from .logger import get_logger
 from .menu import Product
 from .sync import fetch_variant_id
 
@@ -92,6 +93,7 @@ def _fire_worker(
     refetched = False
     status_counts: dict[int, int] = {}
     target_qty = max(1, product.quantity)
+    log = get_logger()
 
     while not stop_event.is_set() and attempts < MAX_ATTEMPTS_PER_VARIANT:
         try:
@@ -116,12 +118,17 @@ def _fire_worker(
                     f"   ⚠️  {product.name}：伺服器只加入 {line_qty}/{target_qty}，"
                     "可能受限購限制"
                 )
+            log.info(
+                "成功 handle=%s vid=%s attempts=%d line_qty=%s target=%d",
+                product.handle, vid, attempts, line_qty, target_qty,
+            )
             success_event.set()
             return
 
         if status == 409:
             # 限購 — items are already in the cart, treat as success.
             print(f"\n   ✅ {product.name}：HTTP 409（已達限購＝已在購物車中）")
+            log.info("409 限購視為成功 handle=%s vid=%s attempts=%d", product.handle, vid, attempts)
             success_event.set()
             return
 
@@ -130,9 +137,11 @@ def _fire_worker(
             fresh = fetch_variant_id(session, product.handle)
             if fresh and fresh != vid:
                 print(f"\n   🔄 {product.name}：variant {vid}→{fresh}（just-fetched），重試")
+                log.warning("variant 重抓 handle=%s %s→%s status=%s", product.handle, vid, fresh, status)
                 vid = fresh
             else:
                 print(f"\n   ⚠️  {product.name}：{status}，variant_id 未變，繼續重試")
+                log.warning("variant 重抓無變化 handle=%s vid=%s status=%s", product.handle, vid, status)
             _sleep_ms(FIRE_INTERVAL_MS)
         elif status == 429:
             delay = BACKOFF_429_MS[min(backoff_idx, len(BACKOFF_429_MS) - 1)]
@@ -147,6 +156,10 @@ def _fire_worker(
     if attempts >= MAX_ATTEMPTS_PER_VARIANT and not stop_event.is_set():
         breakdown = ", ".join(f"{s}×{n}" for s, n in sorted(status_counts.items()))
         print(f"   ⚠️  {product.name}：已達最大嘗試次數 ({MAX_ATTEMPTS_PER_VARIANT})；status={breakdown}")
+        log.warning(
+            "達最大嘗試 handle=%s vid=%s attempts=%d status=%s",
+            product.handle, vid, attempts, breakdown,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -267,4 +280,8 @@ def fire(
         for p in failed:
             print(f"   ❌ {p.name}")
 
+    get_logger().info(
+        "搶購結果 %d/%d 成功；失敗=%s",
+        len(succeeded), len(selected), [p.handle for p in failed],
+    )
     return succeeded, failed

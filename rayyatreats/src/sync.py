@@ -22,6 +22,8 @@ from typing import Any
 import requests
 from bs4 import BeautifulSoup
 
+from .logger import get_logger
+
 BASE_URL = "https://www.rayyatreats.com"
 COLLECTION_URL = f"{BASE_URL}/collections/all"
 DATA_DIR = Path(__file__).parent.parent / "data"
@@ -118,6 +120,15 @@ def _fetch_variant(session: requests.Session, handle: str) -> list[dict[str, Any
             price = None
         variants.append({"id": v["id"], "title": v.get("option1"), "price": price})
 
+    if not variants:
+        get_logger().warning(
+            "variant 空 handle=%s status=%s body_len=%s body[:300]=%r",
+            handle,
+            resp.status_code,
+            len(resp.text),
+            resp.text[:300],
+        )
+
     return variants
 
 
@@ -167,17 +178,18 @@ def fetch_remote_products(
         try:
             variants = _fetch_variant(thread_session, handle)
         except Exception as e:
-            print(f"⚠️  {name}：variant 抓取例外（{e}），略過")
+            print(f"⚠️  {name}：抓取商品資料出錯（{e}），略過")
+            get_logger().exception("抓取例外 handle=%s name=%s", handle, name)
             return None
 
         if not variants:
             old = local_map.get(handle, {})
             old_variants = old.get("variants", [])
             if old_variants:
-                print(f"⚠️  {name}：variant 抓取失敗，保留舊資料")
+                print(f"⚠️  {name}：抓不到商品資料，沿用舊的")
                 variants = old_variants
             else:
-                print(f"⚠️  {name}：variant 抓取失敗且無本地備份，略過")
+                print(f"⚠️  {name}：抓不到商品資料，也沒有舊資料可用，略過")
                 return None
 
         price = _infer_price(display_name, variants)
@@ -309,22 +321,22 @@ def _print_diff(remote: list[dict[str, Any]], baseline: list[dict[str, Any]]) ->
     """Print how the live list differs from the committed baseline (info only)."""
     delta = diff(remote, baseline)
     if not any(delta[k] for k in ("added", "removed", "changed")):
-        print("✅ 即時清單與常駐基準一致")
+        print("✅ 產品清單沒有變動")
         return
 
-    print("📋 即時清單與常駐基準有差異：")
+    print("📋 產品清單有變動：")
     for p in delta["added"]:
-        print(f"   ＋ {p['name']}（基準無、即時有）")
+        print(f"   ＋ 新增：{p['name']}")
     for p in delta["removed"]:
-        print(f"   － {p['name']}（基準有、即時無）")
+        print(f"   － 下架：{p['name']}")
     for p in delta["changed"]:
         old = next((x for x in baseline if x["handle"] == p["handle"]), {})
         old_v = [v["id"] for v in old.get("variants", [])]
         new_v = [v["id"] for v in p.get("variants", [])]
         if old_v != new_v:
-            print(f"   ～ {p['name']}  variant_id 變動：{old_v} → {new_v}")
+            print(f"   ～ {p['name']}：商品編號變了（{old_v} → {new_v}）")
         else:
-            print(f"   ～ {p['name']}（其他欄位變動）")
+            print(f"   ～ {p['name']}：內容有更新")
 
 
 # ---------------------------------------------------------------------------
@@ -349,22 +361,26 @@ def refresh(session: requests.Session) -> list[dict[str, Any]]:
     Returns:
         The product list the run should use (live if available, else baseline).
     """
+    log = get_logger()
     baseline = load_baseline()
 
     try:
         remote = fetch_remote_products(session, local=baseline)
     except Exception as e:
-        print(f"⚠️  無法從網站抓取商品（{e}），改用常駐基準清單")
+        print(f"⚠️  連不上網站抓商品（{e}），改用內建的備用清單")
+        log.exception("整體抓取失敗")
         remote = []
 
     if not remote:
-        print("⚠️  未抓到任何商品，改用常駐基準清單")
+        print("⚠️  沒抓到任何商品，改用內建的備用清單")
+        log.warning("fallback 到備用清單（baseline %d 項）", len(baseline))
         save_live(baseline)
         return baseline
 
     _print_diff(remote, baseline)
     save_live(remote)
-    print("✅ products.json 已更新（即時快照）")
+    print("✅ 產品清單已更新")
+    log.info("使用即時清單 %d 項", len(remote))
     return remote
 
 
