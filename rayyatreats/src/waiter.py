@@ -12,7 +12,7 @@ from .config import (
     MAX_ATTEMPTS_PER_VARIANT,
     OVERALL_TIMEOUT_S,
 )
-from .logger import get_logger
+from .logger import err_hint, get_logger
 from .menu import Product
 from .sync import fetch_variant_id
 
@@ -155,9 +155,12 @@ def _fire_worker(
 
     if attempts >= MAX_ATTEMPTS_PER_VARIANT and not stop_event.is_set():
         breakdown = ", ".join(f"{s}×{n}" for s, n in sorted(status_counts.items()))
-        print(f"   ⚠️  {product.name}：已達最大嘗試次數 ({MAX_ATTEMPTS_PER_VARIANT})；status={breakdown}")
+        print(
+            f"   ⚠️  {product.name}：已達最大嘗試次數 ({MAX_ATTEMPTS_PER_VARIANT})"
+            f"仍未成功{err_hint('E05')}"
+        )
         log.warning(
-            "達最大嘗試 handle=%s vid=%s attempts=%d status=%s",
+            "[E05] 達最大嘗試 handle=%s vid=%s attempts=%d status=%s",
             product.handle, vid, attempts, breakdown,
         )
 
@@ -279,9 +282,12 @@ def fire(
     if failed:
         for p in failed:
             print(f"   ❌ {p.name}")
+        print(f"   有商品加入失敗{err_hint('E06')}")
+        get_logger().warning(
+            "[E06] 搶購結果 %d/%d 成功；失敗=%s",
+            len(succeeded), len(selected), [p.handle for p in failed],
+        )
+    else:
+        get_logger().info("搶購結果 %d/%d 全數成功", len(succeeded), len(selected))
 
-    get_logger().info(
-        "搶購結果 %d/%d 成功；失敗=%s",
-        len(succeeded), len(selected), [p.handle for p in failed],
-    )
     return succeeded, failed
