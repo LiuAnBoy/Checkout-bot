@@ -14,6 +14,16 @@ from zoneinfo import ZoneInfo
 TZ = ZoneInfo("Asia/Taipei")
 LOG_DIR = Path(__file__).parent.parent / "logs"
 
+# Error-code registry. Each failure surfaces a short code on the console and
+# tags the matching detailed entry in the log file, so the two can be matched
+# by searching the code:
+#   E01  商品清單整體更新失敗（抓取丟例外）
+#   E02  抓不到任何商品，改用備用清單
+#   E03  單一商品資料抓取出錯（例外）
+#   E04  單一商品抓不到規格資料（回應為空）
+#   E05  某商品搶購達最大嘗試次數仍未成功
+#   E06  搶購結束時仍有商品加入失敗
+
 
 def get_logger() -> logging.Logger:
     """Return the shared file logger, configuring it on first use.
@@ -36,3 +46,28 @@ def get_logger() -> logging.Logger:
     )
     logger.addHandler(handler)
     return logger
+
+
+def log_file() -> str:
+    """Return the active log file as a short, user-facing path.
+
+    Returns:
+        e.g. ``"logs/bot-20260529.log"`` — suitable for pointing the user to it
+        in console messages.
+    """
+    for handler in get_logger().handlers:
+        if isinstance(handler, logging.FileHandler):
+            return f"logs/{Path(handler.baseFilename).name}"
+    return "logs/"
+
+
+def err_hint(code: str) -> str:
+    """Build the console suffix that points the user to the log for an error.
+
+    Args:
+        code: An error code from the registry above (e.g. ``"E01"``).
+
+    Returns:
+        e.g. ``"（錯誤代碼 E01，詳見 logs/bot-20260529.log）"``.
+    """
+    return f"（錯誤代碼 {code}，詳見 {log_file()}）"

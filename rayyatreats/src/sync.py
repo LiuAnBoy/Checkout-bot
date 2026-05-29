@@ -22,7 +22,7 @@ from typing import Any
 import requests
 from bs4 import BeautifulSoup
 
-from .logger import get_logger
+from .logger import err_hint, get_logger
 
 BASE_URL = "https://www.rayyatreats.com"
 COLLECTION_URL = f"{BASE_URL}/collections/all"
@@ -122,7 +122,7 @@ def _fetch_variant(session: requests.Session, handle: str) -> list[dict[str, Any
 
     if not variants:
         get_logger().warning(
-            "variant 空 handle=%s status=%s body_len=%s body[:300]=%r",
+            "[E04] variant 空 handle=%s status=%s body_len=%s body[:300]=%r",
             handle,
             resp.status_code,
             len(resp.text),
@@ -177,19 +177,19 @@ def fetch_remote_products(
 
         try:
             variants = _fetch_variant(thread_session, handle)
-        except Exception as e:
-            print(f"⚠️  {name}：抓取商品資料出錯（{e}），略過")
-            get_logger().exception("抓取例外 handle=%s name=%s", handle, name)
+        except Exception:
+            print(f"⚠️  {name}：商品資料抓取失敗，略過{err_hint('E03')}")
+            get_logger().exception("[E03] 抓取例外 handle=%s name=%s", handle, name)
             return None
 
         if not variants:
             old = local_map.get(handle, {})
             old_variants = old.get("variants", [])
             if old_variants:
-                print(f"⚠️  {name}：抓不到商品資料，沿用舊的")
+                print(f"⚠️  {name}：抓不到商品資料，沿用舊的{err_hint('E04')}")
                 variants = old_variants
             else:
-                print(f"⚠️  {name}：抓不到商品資料，也沒有舊資料可用，略過")
+                print(f"⚠️  {name}：抓不到商品資料，也沒有舊資料可用，略過{err_hint('E04')}")
                 return None
 
         price = _infer_price(display_name, variants)
@@ -366,14 +366,15 @@ def refresh(session: requests.Session) -> list[dict[str, Any]]:
 
     try:
         remote = fetch_remote_products(session, local=baseline)
-    except Exception as e:
-        print(f"⚠️  連不上網站抓商品（{e}），改用內建的備用清單")
-        log.exception("整體抓取失敗")
-        remote = []
+    except Exception:
+        print(f"⚠️  商品清單更新失敗，改用內建的備用清單{err_hint('E01')}")
+        log.exception("[E01] 整體抓取失敗")
+        save_live(baseline)
+        return baseline
 
     if not remote:
-        print("⚠️  沒抓到任何商品，改用內建的備用清單")
-        log.warning("fallback 到備用清單（baseline %d 項）", len(baseline))
+        print(f"⚠️  沒抓到任何商品，改用內建的備用清單{err_hint('E02')}")
+        log.warning("[E02] fallback 到備用清單（baseline %d 項）", len(baseline))
         save_live(baseline)
         return baseline
 
