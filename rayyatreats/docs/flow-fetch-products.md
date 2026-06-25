@@ -62,6 +62,21 @@ for a in soup.select('a[href*="/products/"]'):
 - Filter out "RB紙袋" (paper bag, add-on only)
 - Product names contain scheduling info like "4/16 中午12:30開單" — can strip for display
 
+## Weekly Cadence & Update Window
+
+The store runs on a fixed weekly cycle:
+
+| When | Store state | Notes |
+|------|-------------|-------|
+| **Thu 12:30** | Sale opens, products go live | Grab; also the start of the baseline-update window |
+| Thu afternoon → Tue | Products listed | Live fetch works; safe to refresh the baseline |
+| **Wed (all day)** | **All products delisted** | `fetch_remote_products` returns empty |
+| Thu 12:30 | Next sale (display_name date rolls over) | Cycle repeats |
+
+- **The only window to update `products.base.json` is Thu (after the grab) → Tue.** Wednesday returns an empty fetch.
+- Across weeks only the `display_name` date string changes (e.g. `6/25` → `7/2`); `handle` and `variant_id` are stable, so most weeks `refresh()` reports no change and the baseline needs no edit.
+- Running the bot on Wednesday is safe: `refresh()`'s `if not remote` branch falls back to the baseline and never overwrites the snapshot with an empty list.
+
 ## Fetch Trigger (Updated 2026-04-23)
 
 `sync(session, interactive=False)` is called by `bot.py` during **warmup**, before the menu and countdown.
