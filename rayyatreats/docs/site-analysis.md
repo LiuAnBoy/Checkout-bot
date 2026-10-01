@@ -146,3 +146,4 @@ function addToCart() {
 - The variant ID and product ID may also change with new drops — need to re-fetch before each Thursday
 - No anti-bot measures detected (no CAPTCHA, no rate limiting visible)
 - The CSRF token must be fetched fresh before each add-to-cart request (it's per-session)
+- The cart is bound to a cart hash, not to the login session: a `/carts/{hash}` URL opens without logging in

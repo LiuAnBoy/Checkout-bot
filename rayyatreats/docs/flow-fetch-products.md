@@ -75,6 +75,7 @@ The store runs on a fixed weekly cycle:
 
 - **The only window to update `products.base.json` is Thu (after the grab) → Tue.** Wednesday returns an empty fetch.
 - Across weeks only the `display_name` date string changes (e.g. `6/25` → `7/2`); `handle` and `variant_id` are stable, so most weeks `refresh()` reports no change and the baseline needs no edit.
+- To update the product list, run `./venv/bin/python -m src.sync` in `rayyatreats/` for a live fetch and read its diff; when it reports no change, leave `products.base.json` as it is.
 - Running the bot on Wednesday is safe: `refresh()`'s `if not remote` branch falls back to the baseline and never overwrites the snapshot with an empty list.
 
 ## Fetch Trigger (Updated 2026-04-23)
